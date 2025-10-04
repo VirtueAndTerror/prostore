@@ -1,0 +1,8 @@
+## Ignore generated files and build artifacts
+
+lib/generated/**
+prisma/**
+.next/**
+node_modules/**
+
+# If you generate other code that ESLint shouldn't check, add it here.
