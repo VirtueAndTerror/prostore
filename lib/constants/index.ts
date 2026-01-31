@@ -12,3 +12,32 @@ export const signInDefaultValues = {
   email: '',
   password: '',
 };
+export const signUpDefaultValues = {
+  name: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+};
+
+// Dev Tool
+// export const shippingAddressDefaultValues = {
+//   fullName:',
+//   streetAddress: '123 Main St',
+//   city: 'Anytown',
+//   postalCode: '12345',
+//   country: 'USA',
+// };
+
+export const shippingAddressDefaultValues = {
+  fullName: '',
+  streetAddress: '',
+  city: '',
+  postalCode: '',
+  country: '',
+};
+
+export const PAYMENT_METHODS = process.env.PAYMENT_METHODS
+  ? process.env.PAYMENT_METHODS.split(', ')
+  : ['PayPal', 'Stripe', 'CashOnDelivery'];
+
+export const DEFAULT_PAYMENT_METHOD = process.env.PAYMENT_METHOD || 'PayPal';

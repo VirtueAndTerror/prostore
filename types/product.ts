@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { insertProductSchema } from '@/lib/validators';
+
 export type Product = z.infer<typeof insertProductSchema> & {
   id: string;
   rating: number;
@@ -11,3 +12,8 @@ export function formatNumberWithDecimal(num: number): string {
 
   return decimal ? `${int}.${decimal.padEnd(2, '0')}` : `${int}.00`;
 }
+
+export type ProductFromDB = Omit<Product, 'price' | 'rating'> & {
+  price: string;
+  rating: string;
+};

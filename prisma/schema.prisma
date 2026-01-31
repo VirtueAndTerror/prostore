@@ -11,24 +11,24 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model Product {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name        String
-  slug        String   @unique(map: "product_slug_idx")
+  slug        String      @unique(map: "product_slug_idx")
   category    String
   images      String[]
   brand       String
   description String
   stock       Int
-  price       Decimal  @default(0) @db.Decimal(12, 2)
-  rating      Decimal  @default(0) @db.Decimal(3, 2)
-  numReviews  Int      @default(0)
-  isFeatured  Boolean  @default(false)
+  price       Decimal     @default(0) @db.Decimal(12, 2)
+  rating      Decimal     @default(0) @db.Decimal(3, 2)
+  numReviews  Int         @default(0)
+  isFeatured  Boolean     @default(false)
   banner      String?
-  createdAt   DateTime @default(now()) @db.Timestamp(6)
+  createdAt   DateTime    @default(now()) @db.Timestamp(6)
+  orderItem   OrderItem[]
 }
 
 model User {
@@ -41,10 +41,12 @@ model User {
   role          String    @default("USER")
   address       Json?     @db.Json
   paymentMethod String?   @map("payment_method")
-  account       Account[]
-  session       Session[]
   createdAt     DateTime  @default(now()) @db.Timestamp(6)
   updatedAt     DateTime  @updatedAt
+  account       Account[]
+  session       Session[]
+  cart          Cart[]
+  orders        Order[]
 }
 
 model Account {
@@ -84,4 +86,50 @@ model VerificationToken {
   expires     DateTime @db.Timestamp(6)
 
   @@id([indentifier, token])
+}
+
+model Cart {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String?  @db.Uuid
+  sessionCartId String   @unique
+  items         Json[]   @default([]) @db.Json
+  itemsPrice    Decimal  @db.Decimal(12, 2)
+  totalPrice    Decimal  @db.Decimal(12, 2)
+  taxPrice      Decimal  @db.Decimal(12, 2)
+  shippingPrice Decimal  @db.Decimal(12, 2)
+  createdAT     DateTime @default(now()) @db.Timestamp(6)
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id              String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String      @db.Uuid
+  shippingAddress Json        @db.Json
+  paymentMethod   String
+  paymentResult   Json?       @db.Json
+  itemsPrice      Decimal     @db.Decimal(12, 2)
+  shippingPrice   Decimal     @db.Decimal(12, 2)
+  taxPrice        Decimal     @db.Decimal(12, 2)
+  totalPrice      Decimal     @db.Decimal(12, 2)
+  isPaid          Boolean     @default(false)
+  paidAt          DateTime?   @db.Timestamp(6)
+  isDelivered     Boolean     @default(false)
+  deliveredAt     DateTime?   @db.Timestamp(6)
+  createdAt       DateTime    @default(now()) @db.Timestamp(6)
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  OrderItem       OrderItem[]
+}
+
+model OrderItem {
+  orderId   String  @db.Uuid
+  productId String  @db.Uuid
+  qty       Int
+  price     Decimal @db.Decimal(12, 2)
+  name      String
+  slug      String
+  image     String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([orderId, productId], map: "order_item_pk")
 }

@@ -1,8 +1,9 @@
-import ProductPrice from '@/components/shared/product/product-price';
+import AddToCart from '@/components/shared/product/add-to-cart';
 import ProductImages from '@/components/shared/product/product-images';
+import ProductPrice from '@/components/shared/product/product-price';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { GetProductBySlug } from '@/lib/actions';
+import { GetProductBySlug, getMyCart } from '@/lib/actions';
 import { notFound } from 'next/navigation';
 
 interface Props {
@@ -11,11 +12,20 @@ interface Props {
 
 const ProductDetailsPage = async ({ params }: Props) => {
   const { slug } = await params;
+  let product;
+  let cart;
+  try {
+    const [p, c] = await Promise.all([GetProductBySlug(slug), getMyCart()]);
+    product = p;
+    cart = c;
+  } catch (err) {
+    return notFound();
+  }
 
-  const product = await GetProductBySlug(slug);
   if (!product) return notFound();
 
   const {
+    id,
     name,
     brand,
     category,
@@ -26,8 +36,6 @@ const ProductDetailsPage = async ({ params }: Props) => {
     stock,
     images,
   } = product;
-
-  const numPrice = Number(price);
 
   return (
     <section>
@@ -49,7 +57,7 @@ const ProductDetailsPage = async ({ params }: Props) => {
             </p>
             <div className='flex flex-col sm:flex-row sm:items-center gap-3'>
               <ProductPrice
-                value={numPrice}
+                price={price}
                 className='w-24 rounded-full bg-green-100 text-green-700 px-5 py-2'
               />
             </div>
@@ -66,7 +74,7 @@ const ProductDetailsPage = async ({ params }: Props) => {
               <div className='mb-2 flex justify-between'>
                 <div>Price</div>
                 <div>
-                  <ProductPrice value={numPrice} />
+                  <ProductPrice price={price} />
                 </div>
               </div>
               <div className='mb-2 flex justify-between'>
@@ -77,7 +85,21 @@ const ProductDetailsPage = async ({ params }: Props) => {
                   <Badge variant='destructive'>Out of Stock</Badge>
                 )}
               </div>
-              {stock > 0 && <div className='flex-center'></div>}
+              {stock > 0 && (
+                <div className='flex-center'>
+                  <AddToCart
+                    cart={cart ?? undefined}
+                    item={{
+                      productId: id,
+                      name,
+                      slug,
+                      price,
+                      qty: 1,
+                      image: images[0],
+                    }}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

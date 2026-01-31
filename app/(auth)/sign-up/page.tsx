@@ -11,17 +11,17 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import CredentialsSignInForm from './credentials-signin-form';
+import SignUpForm from './sign-up-form';
 
 export const metadata: Metadata = {
-  title: 'Sign In',
+  title: 'Sign Up',
 };
 
 interface Props {
   searchParams: Promise<{ callbackUrl: string }>;
 }
 
-const SignInPage = async ({ searchParams }: Props) => {
+const SignUpPage = async ({ searchParams }: Props) => {
   const { callbackUrl } = await searchParams;
 
   const session = await auth();
@@ -41,17 +41,17 @@ const SignInPage = async ({ searchParams }: Props) => {
               priority
             />
           </Link>
-          <CardTitle className='text-center'>Sign In</CardTitle>
+          <CardTitle className='text-center'>Create Account</CardTitle>
           <CardDescription className='text-center'>
-            {`Sign into your ${APP_NAME} account`}
+            {`Enter your information below to sign up`}
           </CardDescription>
         </CardHeader>
         <CardContent className='space-y-4'>
-          <CredentialsSignInForm />
+          <SignUpForm />
         </CardContent>
       </Card>
     </div>
   );
 };
 
-export default SignInPage;
+export default SignUpPage;
