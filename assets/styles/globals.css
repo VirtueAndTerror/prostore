@@ -1,36 +1,42 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-@layer utilities {
-  .wrapper {
-    @apply max-w-7xl lg:mx-auto p-5 md:px-10 w-full;
-  }
+/* 1. Theme Configuration */
+@theme {
+  /* Mapping your custom HSL variables to Tailwind functional colors */
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
 
-  .flex-start {
-    @apply flex justify-start items-center;
-  }
-  .flex-center {
-    @apply flex justify-center items-center;
-  }
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
 
-  .flex-between {
-    @apply flex justify-between items-center;
-  }
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
 
-  .h1-bold {
-    @apply font-bold text-3xl lg:text-4xl;
-  }
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
 
-  .h2-bold {
-    @apply font-bold text-2xl lg:text-3xl;
-  }
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
 
-  .h3-bold {
-    @apply font-bold text-xl lg:text-2xl;
-  }
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
 }
 
+/* 2. Base Variables (Shadcn / Custom) */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -52,13 +58,9 @@
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
     --radius: 0.5rem;
   }
+
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -79,20 +81,10 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
-    --chart-1: 220 70% 50%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
   }
 }
 
-@layer base {
-  body {
-    @apply bg-background text-foreground;
-  }
-}
-
+/* 3. Global Styles */
 @layer base {
   * {
     @apply border-border;
@@ -100,4 +92,42 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* 4. Custom Utilities (The v4 way) */
+@utility wrapper {
+  @apply max-w-7xl lg:mx-auto p-5 md:px-10 w-full;
+}
+
+@utility flex-start {
+  @apply flex justify-start items-center;
+}
+
+@utility flex-center {
+  @apply flex justify-center items-center;
+}
+
+@utility flex-between {
+  @apply flex justify-between items-center;
+}
+
+@utility h1-bold {
+  @apply font-bold text-3xl lg:text-4xl;
+}
+
+@utility h2-bold {
+  @apply font-bold text-2xl lg:text-3xl;
+}
+
+@utility h3-bold {
+  @apply font-bold text-xl lg:text-2xl;
+}
+
+/* 5. Manual Overrides */
+html.dark .upload-field .text-white {
+  color: #ffffff !important;
+}
+
+.upload-field .text-white {
+  color: #000 !important;
 }
