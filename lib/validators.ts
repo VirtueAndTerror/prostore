@@ -6,7 +6,7 @@ const currency = z
   .string()
   .refine(
     (value) => /^\d+(\.\d{2})?$/.test(formatNumberWithDecimal(Number(value))),
-    'Price must have exactly two decimal places'
+    'Price must have exactly two decimal places',
   );
 
 // Schema for inserting products
@@ -15,6 +15,7 @@ export const insertProductSchema = z.object({
   slug: z.string().min(3, 'Slug must be at least 3 characters'),
   category: z.string().min(3, 'Category must be at least 3 characters'),
   brand: z.string().min(3, 'Description must be at least 3 characters'),
+  description: z.string().min(3, 'Description must be at least 3 characters'),
   stock: z.coerce.number(),
   images: z.array(z.string()).min(1, 'Products must have at least 1 image'),
   isFeatured: z.boolean(),
@@ -84,3 +85,44 @@ export const paymentMethodSchema = z
     path: ['type'],
     message: 'Invalid payment method',
   });
+
+// Schema for inserting an order
+export const insertOrderSchema = z.object({
+  userId: z.string().min(1, 'User ID is required'),
+  itemsPrice: currency,
+  shippingPrice: currency,
+  taxPrice: currency,
+  totalPrice: currency,
+  paymentMethod: z.string().refine((data) => PAYMENT_METHODS.includes(data), {
+    message: 'Invalid payment method',
+  }),
+  shippingAddress: shippingAddressSchema,
+});
+
+// Schema for inserting an order item
+export const insertOrderItemSchema = z.object({
+  productId: z.string(),
+  slug: z.string(),
+  name: z.string(),
+  image: z.string(),
+  price: currency,
+  qty: z.number(),
+});
+
+export const paymentResultSchema = z.object({
+  id: z.string(),
+  status: z.string(),
+  email: z.email(),
+  pricePaid: z.string(),
+});
+
+// Schema for updating the user profile
+export const updateProfileSchema = z.object({
+  name: z.string().min(3, 'Name must be at least 3 characters long'),
+  email: z.email().min(3, 'Email must be at least 3 characters long'),
+});
+
+// Schema for updating products
+export const updateProductSchema = insertProductSchema.extend({
+  id: z.string().min(1, 'Product ID is required'),
+});

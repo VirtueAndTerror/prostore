@@ -7,14 +7,14 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { signOutUser } from '@/lib/actions';
+import SignOutButton from '@/components/shared/header/sign-out-button';
 import { UserIcon } from 'lucide-react';
 import Link from 'next/link';
 
 const UserButton = async () => {
   const session = await auth();
 
-  if (!session?.user) {
+  if (!session) {
     return (
       <Button asChild>
         <Link href='/sign-in'>
@@ -51,15 +51,24 @@ const UserButton = async () => {
             </div>
           </DropdownMenuLabel>
 
+          <DropdownMenuItem>
+            <Link href={'/user/profile'} className={'w-full'}>
+              User Profile
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem>
+            <Link href={'/user/orders'} className={'w-full'}>
+              Order History
+            </Link>
+          </DropdownMenuItem>
+          {session.user.role === 'admin' && (
+            <DropdownMenuItem className='w-full'>
+              <Link href={'/admin/overview'}>Admin</Link>
+            </DropdownMenuItem>
+          )}
+
           <DropdownMenuItem className='p-0 mb-1'>
-            <form action={signOutUser} className='w-full'>
-              <Button
-                className='w-full py-4 px-2 h-4 justify-start'
-                variant='ghost'
-              >
-                SignOut
-              </Button>
-            </form>
+            <SignOutButton />
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

@@ -3,8 +3,8 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import { compare } from 'bcrypt-ts-edge';
 import NextAuth, { NextAuthConfig } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 
 type SafeUser = {
   id: string;
@@ -56,7 +56,7 @@ export const config: NextAuthConfig = {
 
         const isMatch = await compare(
           credentials.password as string,
-          user.password
+          user.password,
         );
 
         if (!isMatch) return null;

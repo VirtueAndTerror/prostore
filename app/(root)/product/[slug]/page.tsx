@@ -3,7 +3,7 @@ import ProductImages from '@/components/shared/product/product-images';
 import ProductPrice from '@/components/shared/product/product-price';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
-import { GetProductBySlug, getMyCart } from '@/lib/actions';
+import { getProductBySlug, getMyCart } from '@/lib/actions';
 import { notFound } from 'next/navigation';
 
 interface Props {
@@ -12,17 +12,13 @@ interface Props {
 
 const ProductDetailsPage = async ({ params }: Props) => {
   const { slug } = await params;
-  let product;
-  let cart;
-  try {
-    const [p, c] = await Promise.all([GetProductBySlug(slug), getMyCart()]);
-    product = p;
-    cart = c;
-  } catch (err) {
-    return notFound();
-  }
 
-  if (!product) return notFound();
+  const [product, cart] = await Promise.all([
+    getProductBySlug(slug),
+    getMyCart(),
+  ]);
+
+  if (!product || !cart) return notFound();
 
   const {
     id,

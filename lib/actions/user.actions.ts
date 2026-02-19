@@ -8,6 +8,7 @@ import {
   signInFormSchema,
   signUpFormSchema,
   paymentMethodSchema,
+  shippingAddressSchema,
 } from '../validators';
 import { formatError } from '../utils';
 import { ShippingAddress } from '@/types';
@@ -16,7 +17,7 @@ import { z } from 'zod';
 // Sign in the user with credentials
 export async function signInWithCredentials(
   prevState: unknown,
-  formData: FormData
+  formData: FormData,
 ) {
   try {
     const user = signInFormSchema.parse({
@@ -85,22 +86,29 @@ export const getUserById = async (id: string) => {
   const user = await prisma.user.findUnique({ where: { id } });
 
   if (!user) {
-    throw new Error('User not found');
+    throw new Error('User not found with the provided ID');
   }
 
   return user;
 };
 
-// Update user address
-export const updateUserAddress = async (address: ShippingAddress) => {
+// Update user's address
+export const updateUserAddress = async (data: ShippingAddress) => {
   try {
     const session = await auth();
 
     const currentUser = await prisma.user.findUnique({
       where: { id: session?.user?.id },
-      select: { address: true },
     });
+
     if (!currentUser) throw new Error('User Not Found');
+
+    const address = shippingAddressSchema.parse(data);
+
+    await prisma.user.update({
+      where: { id: currentUser.id },
+      data: { address },
+    });
 
     return {
       success: true,
@@ -116,7 +124,7 @@ export const updateUserAddress = async (address: ShippingAddress) => {
 
 // Update user's payment method
 export const updateUserPaymentMethod = async (
-  data: z.infer<typeof paymentMethodSchema>
+  data: z.infer<typeof paymentMethodSchema>,
 ) => {
   try {
     const session = await auth();
@@ -141,6 +149,35 @@ export const updateUserPaymentMethod = async (
   } catch (error) {
     return {
       success: false,
+      message: formatError(error),
+    };
+  }
+};
+
+export const updateProfile = async (user: { name: string; email: string }) => {
+  try {
+    const session = await auth();
+    const currentUser = await prisma.user.findUnique({
+      where: { id: session?.user?.id },
+    });
+
+    if (!currentUser) {
+      throw new Error('User with the given credentials was not found');
+    }
+
+    await prisma.user.update({
+      where: { id: currentUser.id },
+      data: { name: user.name },
+    });
+
+    return {
+      success: true,
+      message: 'User updated successfully',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      succsess: false,
       message: formatError(error),
     };
   }
