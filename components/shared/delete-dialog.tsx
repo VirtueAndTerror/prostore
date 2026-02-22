@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useTransition } from 'react';
 
-import { Trash2Icon } from 'lucide-react';
+import { Trash2Icon, Check } from 'lucide-react';
 
 interface Props {
   id: string;
@@ -32,7 +32,11 @@ const DeleteDialog = ({ id, action }: Props) => {
       const { success, message } = await action(id);
 
       if (!success) {
-        toast({ variant: 'destructive', description: message });
+        toast({
+          variant: 'destructive',
+          description: message,
+          icon: <Check />,
+        });
       } else {
         toast({ description: message });
         setOpen(false);
