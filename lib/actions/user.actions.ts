@@ -2,6 +2,7 @@
 
 import { auth, signIn, signOut } from '@/auth';
 import { prisma } from '@/db/prisma';
+import { Prisma } from '@/lib/generated/prisma';
 import { hashSync } from 'bcrypt-ts-edge';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import {
@@ -9,10 +10,14 @@ import {
   signUpFormSchema,
   paymentMethodSchema,
   shippingAddressSchema,
+  updateUserSchema,
 } from '../validators';
 import { formatError } from '../utils';
 import { ShippingAddress } from '@/types';
 import { z } from 'zod';
+import { getMyCart } from './cart.actions';
+import { PAGE_SIZE } from '../constants';
+import { revalidatePath } from 'next/cache';
 
 // Sign in the user with credentials
 export async function signInWithCredentials(
@@ -37,8 +42,15 @@ export async function signInWithCredentials(
   }
 }
 
-// Sign Out  user
+// Sign Out user
 export async function signOutUser() {
+  // Get user's cart and delete it.
+  const currentCart = await getMyCart();
+  if (currentCart?.id) {
+    await prisma.cart.delete({ where: { id: currentCart.id } });
+  } else {
+    console.warn('No cart found for deletion');
+  }
   await signOut();
 }
 
@@ -178,6 +190,90 @@ export const updateProfile = async (user: { name: string; email: string }) => {
     console.error(error);
     return {
       succsess: false,
+      message: formatError(error),
+    };
+  }
+};
+
+// Get All Users
+export const getAllUsers = async ({
+  query = '',
+  limit = PAGE_SIZE,
+  page,
+}: {
+  query: string;
+  limit?: number;
+  page: number;
+}) => {
+  const queryFilter: Prisma.UserWhereInput =
+    query && query !== 'all'
+      ? {
+          name: {
+            contains: query,
+            mode: 'insensitive',
+          } as Prisma.StringFilter,
+        }
+      : {};
+
+  const data = await prisma.user.findMany({
+    where: { ...queryFilter },
+    orderBy: { createdAt: 'desc' },
+    take: limit,
+    skip: (page - 1) * limit,
+  });
+
+  const dataCount = await prisma.user.count();
+  const totalPages = Math.ceil(dataCount / limit);
+
+  return {
+    data,
+    totalPages,
+  };
+};
+
+// Delete
+export const deleteUser = async (userId: string) => {
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+
+    revalidatePath('/admin/users');
+
+    return {
+      success: true,
+      message: 'User deleted successfully',
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: formatError(error),
+    };
+  }
+};
+
+// Update
+
+export const updateUser = async (user: z.infer<typeof updateUserSchema>) => {
+  try {
+    const { id, name, role } = user;
+
+    await prisma.user.update({
+      where: { id },
+      data: {
+        id,
+        name,
+        role,
+      },
+    });
+
+    revalidatePath('/admin/users');
+
+    return {
+      success: true,
+      message: 'User updated successfully',
+    };
+  } catch (error) {
+    return {
+      success: false,
       message: formatError(error),
     };
   }

@@ -22,9 +22,9 @@ interface Props {
 }
 
 const OrdersPage = async (props: Props) => {
-  const { page } = await props.searchParams;
+  const { page = 1 } = await props.searchParams;
 
-  const { data, totalPages } = await getMyOrders({ page: Number(page) || 1 });
+  const { data, totalPages } = await getMyOrders({ page: Number(page) });
 
   return (
     <div className='space-y-2'>

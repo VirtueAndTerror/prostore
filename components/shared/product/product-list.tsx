@@ -1,8 +1,8 @@
-import { ProductFromDB } from '@/types';
+import { Product } from '@/types';
 import ProductCard from './product-card';
 
 interface Props {
-  products: ProductFromDB[];
+  products: Product[];
   title?: string;
   limit?: number;
 }

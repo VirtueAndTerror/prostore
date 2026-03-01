@@ -1,3 +1,4 @@
+import { Metadata } from 'next';
 import Link from 'next/link';
 import { getAllProducts, deleteProduct } from '@/lib/actions';
 import { formatCurrency, formatId } from '@/lib';
@@ -12,16 +13,23 @@ import {
 } from '@/components/ui/table';
 import DeleteDialog from '@/components/shared/delete-dialog';
 import Pagination from '@/components/shared/pagination';
+import { requireAdmin } from '@/lib/auth-guard';
+
+export const metadata: Metadata = {
+  title: 'Admin Product',
+}
 
 interface Props {
   searchParams: Promise<{
-    page: string;
-    query: string;
-    category: string;
+    page?: string;
+    query?: string;
+    category?: string;
   }>;
 }
 
 const AdminProductsPage = async (props: Props) => {
+await requireAdmin();
+
   const { page = 1, query = '', category = '' } = await props.searchParams;
 
   const { data: products, totalPages } = await getAllProducts({
@@ -34,6 +42,16 @@ const AdminProductsPage = async (props: Props) => {
     <div className='space-y-2'>
       <div className='flex-between'>
         <h1 className='h2-bold'>Products</h1>
+        {query && (
+          <div>
+            Filtered by <i>&quot;{query}&quot;</i>{' '}
+            <Link href='/admin/products'>
+              <Button variant='outline' size='sm'>
+                Remove Filter
+              </Button>
+            </Link>
+          </div>
+        )}
         <Button asChild variant='default'>
           <Link href={'/admin/products/new'}>Create New Product</Link>
         </Button>
@@ -46,7 +64,7 @@ const AdminProductsPage = async (props: Props) => {
             <TableHead className='text-right'>PRICE</TableHead>
             <TableHead>CATEGORY</TableHead>
             <TableHead>STOCK</TableHead>
-            <TableHead>RATIGN</TableHead>
+            <TableHead>RATING</TableHead>
             <TableHead className='w-25'>ACTIONS</TableHead>
           </TableRow>
         </TableHeader>
@@ -71,7 +89,7 @@ const AdminProductsPage = async (props: Props) => {
           ))}
         </TableBody>
       </Table>
-      {totalPages > 1 && <Pagination page={page} totalPages={totalPages} />}
+      {totalPages > 1 && <Pagination page={Number(page) || 1} totalPages={totalPages} />}
     </div>
   );
 };

@@ -1,11 +1,11 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { ProductFromDB } from '@/types';
+import { Product, ProductFromDB } from '@/types';
 import Image from 'next/image';
 import Link from 'next/link';
 import ProductPrice from './product-price';
 
 interface Props {
-  product: ProductFromDB;
+  product: Product;
 }
 
 const ProductCard = ({ product }: Props) => {

@@ -35,7 +35,6 @@ const DeleteDialog = ({ id, action }: Props) => {
         toast({
           variant: 'destructive',
           description: message,
-          icon: <Check />,
         });
       } else {
         toast({ description: message });
