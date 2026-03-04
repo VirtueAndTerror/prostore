@@ -16,7 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { insertProductSchema, updateProductSchema } from '@/lib';
 import { createProduct, updateProduct } from '@/lib/actions';
-import { productDefaultValues } from '@/lib/constants';
+import { PRODUCT_DEFAULT_VALUES } from '@/lib/constants';
 import { UploadButton } from '@/lib/uploadthing';
 import { Product } from '@/types';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -41,7 +41,7 @@ const ProductForm = ({ type, product, productId }: Props) => {
 
   const form = useForm<z.infer<typeof schema>>({
     resolver: zodResolver(schema),
-    defaultValues: product ?? productDefaultValues,
+    defaultValues: product ?? PRODUCT_DEFAULT_VALUES,
   });
 
   const {

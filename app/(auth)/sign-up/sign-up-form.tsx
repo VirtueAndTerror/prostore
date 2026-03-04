@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { signUpUser } from '@/lib/actions';
-import { signUpDefaultValues } from '@/lib/constants';
+import { SIGN_UP_DEFAULT_VALUES } from '@/lib/constants';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useActionState } from 'react';
@@ -28,7 +28,7 @@ const SignUpForm = () => {
     );
   };
 
-  const { name, email, password, confirmPassword } = signUpDefaultValues;
+  const { name, email, password, confirmPassword } = SIGN_UP_DEFAULT_VALUES;
 
   return (
     <form action={action}>

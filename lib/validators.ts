@@ -9,7 +9,7 @@ const currency = z
     'Price must have exactly two decimal places',
   );
 
-// Schema for inserting products
+// Schema for inserting Products
 export const insertProductSchema = z.object({
   name: z.string().min(3, 'Name must be at leaest 3 characters'),
   slug: z.string().min(3, 'Slug must be at least 3 characters'),
@@ -23,13 +23,13 @@ export const insertProductSchema = z.object({
   price: currency,
 });
 
-// Schema for signing users in
+// Schema for signing users In
 export const signInFormSchema = z.object({
   email: z.email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
 });
 
-// Schema for signin up a user
+// Schema for signing users Up
 export const signUpFormSchema = z
   .object({
     name: z.string().min(3, 'Name must be at least 3 characters'),
@@ -76,7 +76,7 @@ export const shippingAddressSchema = z.object({
   lng: z.number().optional(),
 });
 
-// Schema for payment method
+// Schema for Payment Method
 export const paymentMethodSchema = z
   .object({
     type: z.string().min(1, 'Payment method is required'),
@@ -86,7 +86,7 @@ export const paymentMethodSchema = z
     message: 'Invalid payment method',
   });
 
-// Schema for inserting an order
+// Schema for inserting an Order
 export const insertOrderSchema = z.object({
   userId: z.string().min(1, 'User ID is required'),
   itemsPrice: currency,
@@ -122,13 +122,26 @@ export const updateProfileSchema = z.object({
   email: z.email().min(3, 'Email must be at least 3 characters long'),
 });
 
-// Schema for updating products
+// Schema for updating Producs
 export const updateProductSchema = insertProductSchema.extend({
   id: z.string().min(1, 'Product ID is required'),
 });
 
-// Schema to update users
+// Schema to update Users
 export const updateUserSchema = updateProfileSchema.extend({
   id: z.string().min(1, 'User ID is required'),
   role: z.string().min(1, 'Role is required'),
+});
+
+// Schema to insert Reviews
+export const insertReviewSchema = z.object({
+  title: z.string().min(3, 'Title must be at least 3 characters long'),
+  description: z.string().min(3, 'Title must be at least 3 characters long'),
+  productId: z.string().min(1, 'Product ID is required'),
+  userId: z.string().min(1, 'User ID is required'),
+  rating: z
+    .number()
+    .int()
+    .min(1, 'Rating must be at least 1')
+    .max(5, 'Rating must be at most 5'),
 });

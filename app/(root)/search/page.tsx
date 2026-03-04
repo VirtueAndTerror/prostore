@@ -1,6 +1,8 @@
 import ProductCard from '@/components/shared/product/product-card';
-import { getAllCategories, getAllProducts } from '@/lib/actions';
 import { Button } from '@/components/ui/button';
+import { isActive } from '@/lib';
+import { getAllCategories, getAllProducts } from '@/lib/actions';
+import { PRICES_OPTS, RATINGS_OPTS, SORT_OPTS } from '@/lib/constants';
 import Link from 'next/link';
 
 interface Props {
@@ -14,53 +16,18 @@ interface Props {
   }>;
 }
 
-const prices = [
-  {
-    name: '$1 to $50',
-    value: '1-50',
-  },
-  {
-    name: '$51 to $100',
-    value: '51-100',
-  },
-  {
-    name: '$101 to $200',
-    value: '101-200',
-  },
-  {
-    name: '$201 to $500',
-    value: '201-500',
-  },
-  {
-    name: '$501-$1000',
-    value: '501-1000',
-  },
-];
-
-const ratings = [4, 3, 2, 1];
-
-const sortOptions = ['newest', 'lowest', 'highest', 'rating'];
-
-export async function generateMetadata(props: {
-  searchParams: Promise<{
-    query: string;
-    category: string;
-    price: string;
-    rating: string;
-  }>;
-}) {
+export async function generateMetadata({ searchParams }: Props) {
   const {
     query = 'all',
     category = 'all',
     price = 'all',
     rating = 'all',
-  } = await props.searchParams;
+  } = await searchParams;
 
-  const isQuerySet = query && query !== 'all' && query.trim() !== '';
-  const isCategorySet =
-    category && category !== 'all' && category.trim() !== '';
-  const isPriceSet = price && price !== 'all' && price.trim() !== '';
-  const isRatingSet = rating && rating !== 'all' && rating.trim() !== '';
+  const isQuerySet = isActive(query);
+  const isCategorySet = isActive(category);
+  const isPriceSet = isActive(price);
+  const isRatingSet = isActive(rating);
 
   if (isQuerySet || isCategorySet || isPriceSet || isRatingSet) {
     return {
@@ -88,52 +55,43 @@ const SearchPage = async ({ searchParams }: Props) => {
   } = await searchParams;
 
   // Build Filter Url
-  const getFilterUrl = ({
-    c,
-    s,
-    p,
-    r,
-    pg,
-  }: {
-    c?: string;
-    s?: string;
-    p?: string;
-    r?: string;
-    pg?: string;
-  }) => {
-    const params = { query, category, price, rating, sort, page };
-
-    if (c) params.category = c;
-    if (p) params.price = p;
-    if (s) params.sort = s;
-    if (r) params.rating = r;
-    if (pg) params.page = pg;
-
+  const getFilterUrl = (
+    overrides: Partial<{
+      query: string;
+      category: string;
+      price: string;
+      rating: string;
+      sort: string;
+      page: string;
+    }> = {},
+  ) => {
+    const params = { query, category, price, rating, sort, page, ...overrides };
     return `/search?${new URLSearchParams(params).toString()}`;
   };
 
-  const { data: products } = await getAllProducts({
-    query,
-    category,
-    price,
-    rating,
-    sort,
-    page: Number(page),
-  });
-
-  const categories = await getAllCategories();
+  const [{ data: products }, categories] = await Promise.all([
+    getAllProducts({
+      query,
+      category,
+      price,
+      rating,
+      sort,
+      page: Number(page),
+    }),
+    getAllCategories(),
+  ]);
 
   return (
     <div className='grid md:grid-cols-5 md:gap-5'>
       <div className='filter-links'>
         {/* Category Links*/}
-        <div className='text-xl mb-2 mt-3'>Departmet</div>
+        <div className='text-xl mb-2 mt-3'>Department</div>
         <div>
           <ul className='space-y-1'>
             <li>
               <Link
                 className={`${(category === 'all' || category === '') && 'font-bold'}`}
-                href={getFilterUrl({ c: 'all' })}
+                href={getFilterUrl({ category: 'all' })}
               >
                 Any
               </Link>
@@ -142,7 +100,7 @@ const SearchPage = async ({ searchParams }: Props) => {
               <li key={x.category}>
                 <Link
                   className={`${category === x.category && 'font-bold'}`}
-                  href={getFilterUrl({ c: x.category })}
+                  href={getFilterUrl({ category: x.category })}
                 >
                   {x.category}
                 </Link>
@@ -157,18 +115,18 @@ const SearchPage = async ({ searchParams }: Props) => {
             <li>
               <Link
                 className={`${price === 'all' && 'font-bold'}`}
-                href={getFilterUrl({ p: 'all' })}
+                href={getFilterUrl({ price: 'all' })}
               >
                 Any
               </Link>
             </li>
-            {prices.map((p) => (
-              <li key={p.value}>
+            {PRICES_OPTS.map((priceOption) => (
+              <li key={priceOption.value}>
                 <Link
-                  className={`${price === p.value && 'font-bold'}`}
-                  href={getFilterUrl({ p: p.value })}
+                  className={`${price === priceOption.value && 'font-bold'}`}
+                  href={getFilterUrl({ price: priceOption.value })}
                 >
-                  {p.name}
+                  {priceOption.name}
                 </Link>
               </li>
             ))}
@@ -181,18 +139,18 @@ const SearchPage = async ({ searchParams }: Props) => {
             <li>
               <Link
                 className={`${rating === 'all' && 'font-bold'}`}
-                href={getFilterUrl({ r: 'all' })}
+                href={getFilterUrl({ rating: 'all' })}
               >
                 Any
               </Link>
             </li>
-            {ratings.map((r) => (
-              <li key={r}>
+            {RATINGS_OPTS.map((ratingOption) => (
+              <li key={ratingOption}>
                 <Link
-                  className={`${rating === r.toString() && 'font-bold'}`}
-                  href={getFilterUrl({ r: `${r}` })}
+                  className={`${rating === ratingOption.toString() && 'font-bold'}`}
+                  href={getFilterUrl({ rating: `${ratingOption}` })}
                 >
-                  {`${r} stars & up`}
+                  {`${ratingOption} stars & up`}
                 </Link>
               </li>
             ))}
@@ -202,15 +160,15 @@ const SearchPage = async ({ searchParams }: Props) => {
       <div className='md:col-span-4 space-y-4'>
         <div className='flex-between flex-col md:flex-row my-4'>
           <div className='flex items-center'>
-            {query !== 'all' && query !== '' && 'Query: ' + query}
-            {category !== 'all' && category !== '' && ' Category: ' + category}
-            {price !== 'all' && ' Price: ' + price}
-            {rating !== 'all' && ' Rating: ' + rating + ' stars & up'}
+            {isActive(query) && 'Query: ' + query}
+            {isActive(category) && ' Category: ' + category}
+            {isActive(price) && ' Price: ' + price}
+            {isActive(rating) && ' Rating: ' + rating + ' stars & up'}
             &nbsp;
-            {(query !== 'all' && query !== '') ||
-            (category !== 'all' && category !== '') ||
-            rating !== 'all' ||
-            price !== 'all' ? (
+            {isActive(query) ||
+            isActive(category) ||
+            isActive(rating) ||
+            isActive(price) ? (
               <Button variant={'link'} asChild>
                 <Link href={'/search'}>Clear</Link>
               </Button>
@@ -218,23 +176,26 @@ const SearchPage = async ({ searchParams }: Props) => {
           </div>
           <div>
             Sort by{' '}
-            {sortOptions.map((s) => (
+            {SORT_OPTS.map((sortOption) => (
               <Link
-                key={s}
-                href={getFilterUrl({ s })}
-                className={`mx-2 ${sort === s && 'font-bold'}`}
+                key={sortOption}
+                href={getFilterUrl({ sort: sortOption })}
+                className={`mx-2 ${sort === sortOption && 'font-bold'}`}
               >
                 {' '}
-                {s}
+                {sortOption}
               </Link>
             ))}
           </div>
         </div>
         <div className='grid grid-cols-1 gap-4 md:grid-cols-3'>
-          {(!products || products.length === 0) && <p>No products found</p>}
-          {products && products.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
+          {!products || products.length === 0 ? (
+            <p>No products found</p>
+          ) : (
+            products.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))
+          )}
         </div>
       </div>
     </div>

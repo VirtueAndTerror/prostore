@@ -156,3 +156,7 @@ export const buildUrlQuery = ({
     },
   );
 };
+
+// Returns a Boolean
+export const isActive = (value?: string) =>
+  value !== 'all' && value?.trim() !== '';

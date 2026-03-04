@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { signInWithCredentials } from '@/lib/actions';
-import { signInDefaultValues } from '@/lib/constants';
+import { SIGN_IN_DEFAULT_VALUES } from '@/lib/constants';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useActionState } from 'react';
@@ -28,7 +28,7 @@ const CredentialsSignInForm = () => {
     );
   };
 
-  const { email, password } = signInDefaultValues;
+  const { email, password } = SIGN_IN_DEFAULT_VALUES;
   return (
     <form action={action}>
       <input type='hidden' name='callbackUrl' value={callbackUrl} />

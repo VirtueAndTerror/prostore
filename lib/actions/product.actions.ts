@@ -1,10 +1,10 @@
 'use server';
 import { prisma } from '@/db/prisma';
 import { LATEST_PRODUCTS_LIMIT, PAGE_SIZE } from '../constants';
-import { convertToPlainObject, formatError } from '../utils';
+import { convertToPlainObject, formatError, isActive } from '../utils';
 import { revalidatePath } from 'next/cache';
 import { insertProductSchema, updateProductSchema } from '../validators';
-import z, { gte } from 'zod';
+import z from 'zod';
 import { ProductFromDB } from '@/types';
 import { Prisma } from '@/lib/generated/prisma';
 
@@ -52,33 +52,34 @@ export const getAllProducts = async ({
   sort?: string;
 }) => {
   // Query filter
-  const queryFilter: Prisma.ProductWhereInput =
-    query && query !== 'all'
-      ? {
-          name: {
-            contains: query,
-            mode: 'insensitive',
-          } as Prisma.StringFilter,
-        }
-      : {};
+  const queryFilter: Prisma.ProductWhereInput = isActive(query)
+    ? {
+        name: {
+          contains: query,
+          mode: 'insensitive',
+        } as Prisma.StringFilter,
+      }
+    : {};
 
   // Category filter
-  const categoryFilter = category && category !== 'all' ? { category } : {};
+  const categoryFilter: Prisma.ProductWhereInput = isActive(category)
+    ? { category }
+    : {};
 
   // Price filter
-  const priceFilter: Prisma.ProductWhereInput =
-    price && price !== 'all'
-      ? {
-          price: {
-            gte: Number(price.split('-')[0]),
-            lte: Number(price.split('-')[1]),
-          },
-        }
-      : {};
+  const priceFilter: Prisma.ProductWhereInput = isActive(price)
+    ? {
+        price: {
+          gte: Number(price?.split('-')[0]),
+          lte: Number(price?.split('-')[1]),
+        },
+      }
+    : {};
 
   // Rating filter
-  const ratingFilter =
-    rating && rating !== 'all' ? { rating: { gte: Number(rating) } } : {};
+  const ratingFilter = isActive(rating)
+    ? { rating: { gte: Number(rating) } }
+    : {};
 
   const [data, dataCount] = await prisma.$transaction([
     prisma.product.findMany({
@@ -172,7 +173,10 @@ export const updateProduct = async (
 
 // Get All Categories
 export const getAllCategories = async () => {
-  const data = await prisma.product.groupBy({ by: ['category'], _count: true });
+  const data = await prisma.product.groupBy({
+    by: ['category'],
+    _count: true,
+  });
 
   return data;
 };

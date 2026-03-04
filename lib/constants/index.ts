@@ -1,18 +1,22 @@
 export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Prostore';
+
 export const APP_DESCRIPTION =
   process.env.NEXT_PUBLIC_APP_DESCRIPTION ||
   'A modern e-commerce store build with Next.js';
+
 export const SERVER_URL =
   process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
+
 export const LATEST_PRODUCTS_LIMIT = Number(
   process.env.LATEST_PRODUCTS_LIMIT || 4,
 );
 
-export const signInDefaultValues = {
+// Forms default values
+export const SIGN_IN_DEFAULT_VALUES = {
   email: '',
   password: '',
 };
-export const signUpDefaultValues = {
+export const SIGN_UP_DEFAULT_VALUES = {
   name: '',
   email: '',
   password: '',
@@ -28,7 +32,7 @@ export const signUpDefaultValues = {
 //   country: 'USA',
 // };
 
-export const shippingAddressDefaultValues = {
+export const SHIPPING_ADDRESS_DEFAULT_VALUES = {
   fullName: '',
   streetAddress: '',
   city: '',
@@ -36,17 +40,7 @@ export const shippingAddressDefaultValues = {
   country: '',
 };
 
-// TODO: refactor code to follow constants convention ex. ['PAYPAL', 'STRIPE', 'CASH_ON_DELIVERY']
-
-export const PAYMENT_METHODS = process.env.PAYMENT_METHODS
-  ? process.env.PAYMENT_METHODS.split(', ')
-  : ['PayPal', 'Stripe', 'CashOnDelivery'];
-
-export const DEFAULT_PAYMENT_METHOD = process.env.PAYMENT_METHOD || 'PayPal';
-
-export const PAGE_SIZE = Number(process.env.PAGE_SIZE) || 4;
-
-export const productDefaultValues = {
+export const PRODUCT_DEFAULT_VALUES = {
   name: '',
   slug: '',
   category: '',
@@ -61,6 +55,49 @@ export const productDefaultValues = {
   banner: null,
 };
 
+export const REVIEW_DEFAULT_VALUES = {
+  title: '',
+  comment: '',
+  rating: 0,
+};
+
+// TODO: refactor code to follow constants convention ex. ['PAYPAL', 'STRIPE', 'CASH_ON_DELIVERY']
+
+export const PAYMENT_METHODS = process.env.PAYMENT_METHODS
+  ? process.env.PAYMENT_METHODS.split(', ')
+  : ['PAYPAL', 'STRIPE', 'CASH_ON_DELIVERY'];
+
+export const DEFAULT_PAYMENT_METHOD = process.env.PAYMENT_METHOD || 'PAYPAL';
+
+export const PAGE_SIZE = Number(process.env.PAGE_SIZE) || 4;
+
 export const USER_ROLES = process.env.USER_ROLES
   ? process.env.USER_ROLES.split(', ')
   : new Array('admin', 'user');
+
+export const PRICES_OPTS = [
+  {
+    name: '$1 to $50',
+    value: '1-50',
+  },
+  {
+    name: '$51 to $100',
+    value: '51-100',
+  },
+  {
+    name: '$101 to $200',
+    value: '101-200',
+  },
+  {
+    name: '$201 to $500',
+    value: '201-500',
+  },
+  {
+    name: '$501 to $1000',
+    value: '501-1000',
+  },
+] as const;
+
+export const RATINGS_OPTS = [4, 3, 2, 1] as const;
+
+export const SORT_OPTS = ['newest', 'lowest', 'highest', 'rating'] as const;
