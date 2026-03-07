@@ -19,6 +19,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
 import PlaceOrderForm from './place-order-form';
+import { formatPaymentMethod } from '@/lib/constants';
 
 export const metadata: Metadata = {
   title: 'Place Order',
@@ -35,6 +36,8 @@ const PlaceOrderpage = async () => {
   if (!cart || cart.items.length === 0) redirect('/cart');
   if (!address) redirect('/shipping-address');
   if (!paymentMethod) redirect('/payment-method');
+
+  const { items, itemsPrice, taxPrice, shippingPrice, totalPrice } = cart;
 
   const { fullName, streetAddress, city, postalCode, country } =
     address as ShippingAddress;
@@ -64,8 +67,8 @@ const PlaceOrderpage = async () => {
           </Card>
           <Card>
             <CardContent className='p-4 gap-4'>
-              <h2 className='text-xl pb-4'>Shipping Address</h2>
-              <p>{paymentMethod}</p>
+              <h2 className='text-xl pb-4'>Payment Method</h2>
+              <p>{formatPaymentMethod(paymentMethod)}</p>
               <div className='mt-3'>
                 <Link href='/payment-method'>
                   <Button variant='outline'>Edit</Button>
@@ -85,32 +88,30 @@ const PlaceOrderpage = async () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {cart.items.map(
-                    ({ productId, slug, image, name, qty, price }) => (
-                      <TableRow key={productId}>
-                        <TableCell>
-                          <Link
-                            href={`/product/${slug}`}
-                            className='flex items-center'
-                          >
-                            <Image
-                              src={image}
-                              alt={name}
-                              width={50}
-                              height={50}
-                            />
-                            <span className='px-2'>{name}</span>
-                          </Link>
-                        </TableCell>
-                        <TableCell className='px-2'>
-                          <span>{qty}</span>
-                        </TableCell>
-                        <TableCell className='px-2'>
-                          <span>{price}</span>
-                        </TableCell>
-                      </TableRow>
-                    ),
-                  )}
+                  {items.map(({ productId, slug, image, name, qty, price }) => (
+                    <TableRow key={productId}>
+                      <TableCell>
+                        <Link
+                          href={`/product/${slug}`}
+                          className='flex items-center'
+                        >
+                          <Image
+                            src={image}
+                            alt={name}
+                            width={50}
+                            height={50}
+                          />
+                          <span className='px-2'>{name}</span>
+                        </Link>
+                      </TableCell>
+                      <TableCell className='px-2'>
+                        <span>{qty}</span>
+                      </TableCell>
+                      <TableCell className='px-2'>
+                        <span>{price}</span>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
@@ -121,19 +122,19 @@ const PlaceOrderpage = async () => {
             <CardContent className='p-4 gap-4 space-y-4'>
               <div className='flex justify-between'>
                 <div>Items</div>
-                <div>{formatCurrency(cart.itemsPrice)}</div>
+                <div>{formatCurrency(itemsPrice)}</div>
               </div>
               <div className='flex justify-between'>
                 <div>Tax</div>
-                <div>{formatCurrency(cart.taxPrice)}</div>
+                <div>{formatCurrency(taxPrice)}</div>
               </div>
               <div className='flex justify-between'>
                 <div>Shipping</div>
-                <div>{formatCurrency(cart.shippingPrice)}</div>
+                <div>{formatCurrency(shippingPrice)}</div>
               </div>
               <div className='flex justify-between'>
                 <div>Total</div>
-                <div>{formatCurrency(cart.totalPrice)}</div>
+                <div>{formatCurrency(totalPrice)}</div>
               </div>
               <PlaceOrderForm />
             </CardContent>

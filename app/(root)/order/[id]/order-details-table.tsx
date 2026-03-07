@@ -32,14 +32,22 @@ import {
 
 import { useToast } from '@/hooks/use-toast';
 import { useTransition } from 'react';
+import StripePayment from './stripe-payment';
+import { formatPaymentMethod } from '@/lib/constants';
 
 interface Props {
   order: Order;
   paypalClientId: string;
+  stripeClientSecret: string | null;
   isAdmin: boolean;
 }
 
-const OrderDetailsTable = ({ order, paypalClientId, isAdmin }: Props) => {
+const OrderDetailsTable = ({
+  order,
+  paypalClientId,
+  stripeClientSecret,
+  isAdmin,
+}: Props) => {
   const { toast } = useToast();
   const {
     id,
@@ -151,7 +159,7 @@ const OrderDetailsTable = ({ order, paypalClientId, isAdmin }: Props) => {
           <Card className='mb-4'>
             <CardContent className='p-4 gap-4'>
               <h2 className='text-xl pb-4'>Payment Method</h2>
-              <p>{paymentMethod}</p>
+              <p>{formatPaymentMethod(paymentMethod)}</p>
               {isPaid ? (
                 <Badge variant={'secondary'}>
                   Paid at {formatDateTime(paidAt!).dateTime}
@@ -241,7 +249,7 @@ const OrderDetailsTable = ({ order, paypalClientId, isAdmin }: Props) => {
                 <div>{formatCurrency(totalPrice)}</div>
               </div>
               {/* PayPal Payment */}
-              {!isPaid && paymentMethod === 'PayPal' && (
+              {!isPaid && paymentMethod === 'PAYPAL' && (
                 <div>
                   <PayPalScriptProvider options={{ clientId: paypalClientId }}>
                     <PayPalButtons
@@ -252,8 +260,17 @@ const OrderDetailsTable = ({ order, paypalClientId, isAdmin }: Props) => {
                 </div>
               )}
 
+              {/* Stripe Payment */}
+              {!isPaid && paymentMethod === 'STRIPE' && stripeClientSecret && (
+                <StripePayment
+                  orderId={id}
+                  priceInCents={Number(totalPrice) * 100}
+                  clientSecret={stripeClientSecret}
+                />
+              )}
+
               {/* Cash On Delivery */}
-              {isAdmin && !isPaid && paymentMethod === 'CashOnDelivery' && (
+              {isAdmin && !isPaid && paymentMethod === 'CASH_ON_DELIVERY' && (
                 <MarkAsPaidButton />
               )}
               {isAdmin && isPaid && !isDelivered && <MarkAsDeliveredButton />}
