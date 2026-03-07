@@ -1,5 +1,5 @@
 'use client';
-import { SalesData } from '@/types';
+import type { SalesData } from '@/types';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 
 interface Props {

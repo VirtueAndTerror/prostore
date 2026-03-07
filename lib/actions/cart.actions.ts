@@ -10,7 +10,7 @@ import { revalidatePath } from 'next/cache';
 
 const calcPrice = (items: CartItem[]) => {
   const itemsPrice = round2Decimals(
-      items.reduce((acc, item) => acc + Number(item.price) * item.qty, 0)
+      items.reduce((acc, item) => acc + Number(item.price) * item.qty, 0),
     ),
     // Free shipping for orders over $100
     shippingPrice = round2Decimals(itemsPrice > 100 ? 0 : 10),
@@ -113,31 +113,38 @@ export const addItemToCart = async (data: CartItem) => {
 
 /* TODO - REFACTOR*/
 
-export const getMyCart = async (): Promise<Cart | null> => {
-  // Check for the cart cookie
-  const sessionCartId = (await cookies()).get('sessionCartId')?.value;
-  if (!sessionCartId) throw new Error('Cart session not found');
+export async function getMyCart(): Promise<Cart | null> {
+  try {
+    // Check for the cart cookie
+    const sessionCartId = (await cookies()).get('sessionCartId')?.value;
+    if (!sessionCartId) {
+      return null;
+    }
 
-  // Get session and user ID
-  const session = await auth();
-  const userId = session?.user?.id;
+    // Get session and user ID
+    const session = await auth();
+    const userId = session?.user?.id;
 
-  const cart = await prisma.cart.findFirst({
-    where: userId ? { userId } : { sessionCartId },
-  });
+    const cart = await prisma.cart.findFirst({
+      where: userId ? { userId } : { sessionCartId },
+    });
 
-  if (!cart) return null;
+    if (!cart) return null;
 
-  // Convert decimals and return
-  return convertToPlainObject({
-    ...cart,
-    items: cart.items as CartItem[],
-    itemsPrice: cart.itemsPrice.toString(),
-    totalPrice: cart.totalPrice.toString(),
-    taxPrice: cart.taxPrice.toString(),
-    shippingPrice: cart.shippingPrice.toString(),
-  });
-};
+    // Convert decimals and return
+    return convertToPlainObject({
+      ...cart,
+      items: cart.items as CartItem[],
+      itemsPrice: cart.itemsPrice.toString(),
+      totalPrice: cart.totalPrice.toString(),
+      taxPrice: cart.taxPrice.toString(),
+      shippingPrice: cart.shippingPrice.toString(),
+    });
+  } catch (error: any) {
+    console.error(formatError(error));
+    return null;
+  }
+}
 
 export const removeItemFromCart = async (productId: string) => {
   try {
@@ -161,7 +168,7 @@ export const removeItemFromCart = async (productId: string) => {
       // Remove form cart
       // Returns an array with all items that don't match the productId
       cart.items = cart.items.filter(
-        (i) => i.productId !== itemInCart.productId
+        (i) => i.productId !== itemInCart.productId,
       );
     } else {
       // Decrease qty

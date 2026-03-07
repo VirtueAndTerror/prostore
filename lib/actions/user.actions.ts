@@ -1,6 +1,7 @@
 'use server';
 
 import { auth, signIn, signOut } from '@/auth';
+import { cookies } from 'next/headers';
 import { prisma } from '@/db/prisma';
 import { Prisma } from '@/lib/generated/prisma';
 import { hashSync } from 'bcrypt-ts-edge';
@@ -44,12 +45,17 @@ export async function signInWithCredentials(
 
 // Sign Out user
 export async function signOutUser() {
-  // Get user's cart and delete it.
-  const currentCart = await getMyCart();
-  if (currentCart?.id) {
-    await prisma.cart.delete({ where: { id: currentCart.id } });
-  } else {
-    console.warn('No cart found for deletion');
+  try {
+    // Get user's cart and delete it.
+    const currentCart = await getMyCart();
+    if (currentCart?.id) {
+      await prisma.cart.delete({ where: { id: currentCart.id } });
+
+      // Delete corresponing cart from cookie
+      (await cookies()).delete('sessionCartId');
+    }
+  } catch (error) {
+    console.error('Error deleting cart on sign out:', error);
   }
   await signOut();
 }

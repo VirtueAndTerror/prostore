@@ -1,5 +1,5 @@
 'use client';
-import { Cart, CartItem } from '@/types';
+import type { Cart, CartItem } from '@/types';
 import { useRouter } from 'next/navigation';
 import { useCallback, useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -46,7 +46,7 @@ const CartTable = ({ cart }: Props) => {
         }
       });
     },
-    [router, toast]
+    [router, toast],
   );
 
   const handleAddItem = useCallback(
@@ -64,7 +64,7 @@ const CartTable = ({ cart }: Props) => {
         }
       });
     },
-    [router, toast]
+    [router, toast],
   );
 
   if (!cart || cart.items.length === 0) {

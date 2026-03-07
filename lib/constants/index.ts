@@ -69,6 +69,32 @@ export const PAYMENT_METHODS = process.env.PAYMENT_METHODS
 
 export const DEFAULT_PAYMENT_METHOD = process.env.PAYMENT_METHOD || 'PAYPAL';
 
+export const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  PAYPAL: 'PayPal',
+  STRIPE: 'Stripe',
+  CASH_ON_DELIVERY: 'Cash on Delivery',
+};
+
+export function formatPaymentMethod(method?: string | null) {
+  // If no method is provided, return an empty string so calling code can render safely.
+  if (!method) return '';
+
+  // Prefer an explicit label map when available (gives us precise spelling & casing).
+  // If the method isn't in the map, fall back to a generic title-casing strategy.
+  return (
+    PAYMENT_METHOD_LABELS[method] ??
+    method
+      // Normalize to lowercase so the title-casing step behaves predictably.
+      .toLowerCase()
+      // Split on underscores (e.g. "CASH_ON_DELIVERY" → ["cash", "on", "delivery"]).
+      .split('_')
+      // Capitalize the first letter of each segment.
+      .map((word) => word[0]?.toUpperCase() + word.slice(1))
+      // Join segments back with spaces to form a human-friendly label.
+      .join(' ')
+  );
+}
+
 export const PAGE_SIZE = Number(process.env.PAGE_SIZE) || 4;
 
 export const USER_ROLES = process.env.USER_ROLES

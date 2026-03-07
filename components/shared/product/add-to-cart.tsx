@@ -5,7 +5,7 @@ import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/hooks/use-toast';
 import { addItemToCart, removeItemFromCart } from '@/lib/actions';
 import { Cart, CartItem } from '@/types';
-import { Minus, Plus, Loader } from 'lucide-react';
+import { Loader, Minus, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useTransition } from 'react';
 
@@ -49,7 +49,7 @@ const AddToCart = ({ item, cart }: Props) => {
         });
       });
     },
-    [router, toast]
+    [router, toast],
   );
 
   // Handle remove from cart
@@ -66,7 +66,7 @@ const AddToCart = ({ item, cart }: Props) => {
         return;
       });
     },
-    [router, toast]
+    [router, toast],
   );
 
   // Check if item is in cart

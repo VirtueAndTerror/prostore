@@ -1,6 +1,21 @@
 {
   "name": "prostore",
   "version": "0.1.0",
+  "description": "A modern, full-stack e-commerce platform built with Next.js, featuring product management, shopping cart, order processing, PayPal integration, and admin dashboard.",
+  "keywords": [
+    "ecommerce",
+    "next.js",
+    "react",
+    "typescript",
+    "tailwindcss",
+    "prisma",
+    "nextauth",
+    "paypal",
+    "shopping-cart",
+    "product-management",
+    "admin-dashboard",
+    "order-management"
+  ],
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -26,6 +41,8 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-toast": "^1.2.15",
+    "@stripe/react-stripe-js": "^5.6.1",
+    "@stripe/stripe-js": "^8.9.0",
     "@uploadthing/react": "^7.3.3",
     "bcrypt-ts-edge": "^3.0.1",
     "class-variance-authority": "^0.7.1",
@@ -42,6 +59,7 @@
     "react-hook-form": "^7.65.0",
     "recharts": "^3.7.0",
     "slugify": "^1.6.6",
+    "stripe": "^20.4.1",
     "tailwind-merge": "^3.4.0",
     "tailwindcss-animate": "^1.0.7",
     "uploadthing": "^7.7.4",

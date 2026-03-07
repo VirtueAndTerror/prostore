@@ -1,12 +1,12 @@
 'use server';
 import { prisma } from '@/db/prisma';
+import { Prisma } from '@/lib/generated/prisma';
+import type { Product } from '@/types';
+import { revalidatePath } from 'next/cache';
+import z from 'zod';
 import { LATEST_PRODUCTS_LIMIT, PAGE_SIZE } from '../constants';
 import { convertToPlainObject, formatError, isActive } from '../utils';
-import { revalidatePath } from 'next/cache';
 import { insertProductSchema, updateProductSchema } from '../validators';
-import z from 'zod';
-import { ProductFromDB } from '@/types';
-import { Prisma } from '@/lib/generated/prisma';
 
 // Get lastest Products
 export const getLatestProducts = async () => {
@@ -19,15 +19,13 @@ export const getLatestProducts = async () => {
 };
 
 // Get Single Product By it's slug
-export const getProductBySlug = async (
-  slug: string,
-): Promise<ProductFromDB | null> =>
+export const getProductBySlug = async (slug: string): Promise<Product | null> =>
   await prisma.product.findFirst({ where: { slug } });
 
 // Get Single Product By it's ID
 export const getProductById = async (
   productId: string,
-): Promise<ProductFromDB | null> => {
+): Promise<Product | null> => {
   const data = await prisma.product.findFirst({ where: { id: productId } });
 
   return convertToPlainObject(data);

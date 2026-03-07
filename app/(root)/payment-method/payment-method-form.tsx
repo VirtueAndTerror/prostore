@@ -13,7 +13,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useToast } from '@/hooks/use-toast';
 import { paymentMethodSchema } from '@/lib';
 import { updateUserPaymentMethod } from '@/lib/actions';
-import { DEFAULT_PAYMENT_METHOD, PAYMENT_METHODS } from '@/lib/constants';
+import { DEFAULT_PAYMENT_METHOD, PAYMENT_METHODS, formatPaymentMethod } from '@/lib/constants';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ArrowRight, Loader } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -91,7 +91,7 @@ const PaymentMethodForm = ({ paymentMethod }: Props) => {
                                 <RadioGroupItem value={paymentMethod} />
                               </FormControl>
                               <FormLabel className='font-normal'>
-                                {paymentMethod}
+                                {formatPaymentMethod(paymentMethod)}
                               </FormLabel>
                             </FormItem>
                           ))}
