@@ -1,8 +1,9 @@
+import { updateOrderToPaid } from '@/lib/actions';
 import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { updateOrderToPaid } from '@/lib/actions';
 
-export async function POST(req: NextRequest, res: NextResponse) {
+export async function POST(req: NextRequest) {
+  // Build the webhook event
   const event = Stripe.webhooks.constructEvent(
     await req.text(),
     req.headers.get('stripe-signature') as string,
