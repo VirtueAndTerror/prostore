@@ -1,6 +1,6 @@
 import { auth } from '@/auth';
 import { getOrderById } from '@/lib/actions';
-import type { ShippingAddress } from '@/types';
+import type { ShippingAddress, PaymentResult } from '@/types';
 import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import OrderDetailsTable from './order-details-table';
@@ -45,10 +45,11 @@ const OrderDetailsPage = async (props: Props) => {
       order={{
         ...order,
         shippingAddress: order.shippingAddress as ShippingAddress,
+        paymentResult: order.paymentResult as PaymentResult,
       }}
       stripeClientSecret={client_secret}
       paypalClientId={process.env.PAYPAL_CLIENT_ID || 'sb'}
-      isAdmin={session?.user.role === 'admin' || false}
+      isAdmin={session?.user?.role === 'admin'}
     />
   );
 };
