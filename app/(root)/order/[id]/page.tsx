@@ -1,10 +1,10 @@
 import { auth } from '@/auth';
 import { getOrderById } from '@/lib/actions';
-import type { ShippingAddress, PaymentResult } from '@/types';
-import { Metadata } from 'next';
+import type { PaymentResult, ShippingAddress } from '@/types';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import OrderDetailsTable from './order-details-table';
 import Stripe from 'stripe';
+import OrderDetailsTable from './order-details-table';
 
 export const metadata: Metadata = {
   title: 'Order Details',
