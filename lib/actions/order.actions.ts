@@ -2,16 +2,22 @@
 
 import { auth } from '@/auth';
 import { prisma } from '@/db/prisma';
-import type { CartItem, PaymentResult, SalesData } from '@/types';
+import type {
+  CartItem,
+  PaymentResult,
+  SalesData,
+  ShippingAddress,
+} from '@/types';
 import { revalidatePath } from 'next/cache';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { PAGE_SIZE } from '../constants';
 import { Prisma } from '../generated/prisma';
 import { paypal } from '../paypal';
-import { convertToPlainObject, formatError } from '../utils';
+import { convertToPlainObject, formatError, isActive } from '../utils';
 import { insertOrderSchema } from '../validators';
 import { getMyCart } from './cart.actions';
 import { getUserById } from './user.actions';
+import { sendPurchaseReciept } from '@/email';
 
 // Main function - Create order and create order items
 export const createOrder = async () => {
@@ -138,7 +144,7 @@ export const getOrderById = async (orderId: string) => {
 // Create PayPal order
 export const createPayPalOrder = async (
   orderId: string,
-): Promise<{ success: boolean; message: string; data?: string }> => {
+): Promise<{ success: boolean; message: string; orderId?: string }> => {
   try {
     // Get order form DB
     const order = await prisma.order.findUnique({
@@ -166,7 +172,7 @@ export const createPayPalOrder = async (
     return {
       success: true,
       message: 'PayPal order created successfully',
-      data: paypalOrder.id,
+      orderId: paypalOrder.id,
     };
   } catch (error) {
     console.error(error);
@@ -202,9 +208,9 @@ export const approvePayPalOrder = async (
       paymentResult: {
         id: captureData.id,
         status: captureData.status,
-        email: captureData.payer.email_address,
+        email: captureData.payer.email_address || '',
         pricePaid:
-          captureData.purchase_units[0]?.payments?.captures[0]?.amount?.value,
+          captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value || '',
       },
     });
 
@@ -270,6 +276,13 @@ export const updateOrderToPaid = async ({
   });
 
   if (!updatedOrder) throw new Error('Failed to retrieve updated order');
+
+  // Send Email Receipt to the user
+  sendPurchaseReciept({
+    ...updatedOrder,
+    shippingAddress: updatedOrder.shippingAddress as ShippingAddress,
+    paymentResult: updatedOrder.paymentResult as PaymentResult,
+  });
 };
 
 // Get user's orders
@@ -351,17 +364,16 @@ export const getAllOrders = async ({
   limit?: number;
   page: number;
 }) => {
-  const queryFilter: Prisma.OrderWhereInput =
-    query && query !== 'all'
-      ? {
-          user: {
-            name: {
-              contains: query,
-              mode: 'insensitive',
-            } as Prisma.StringFilter,
-          },
-        }
-      : {};
+  const queryFilter: Prisma.OrderWhereInput = isActive(query)
+    ? {
+        user: {
+          name: {
+            contains: query,
+            mode: 'insensitive',
+          } as Prisma.StringFilter,
+        },
+      }
+    : {};
 
   const data = await prisma.order.findMany({
     where: { ...queryFilter },

@@ -16,7 +16,9 @@ import Link from 'next/link';
 import Charts from './charts';
 import { requireAdmin } from '@/lib/auth-guard';
 
-export const metadata: Metadata = { title: 'Admin Dashboard' };
+export const metadata: Metadata = {
+  title: 'Admin Dashboard',
+};
 
 const AdminOverviewPage = async () => {
   await requireAdmin();

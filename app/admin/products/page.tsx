@@ -1,23 +1,23 @@
-import { Metadata } from 'next';
-import Link from 'next/link';
-import { getAllProducts, deleteProduct } from '@/lib/actions';
-import { formatCurrency, formatId } from '@/lib';
+import DeleteDialog from '@/components/shared/delete-dialog';
+import Pagination from '@/components/shared/pagination';
 import { Button } from '@/components/ui/button';
 import {
   Table,
-  TableRow,
-  TableHead,
-  TableCell,
-  TableHeader,
   TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@/components/ui/table';
-import DeleteDialog from '@/components/shared/delete-dialog';
-import Pagination from '@/components/shared/pagination';
+import { formatCurrency, formatId } from '@/lib';
+import { deleteProduct, getAllProducts } from '@/lib/actions';
 import { requireAdmin } from '@/lib/auth-guard';
+import { Metadata } from 'next';
+import Link from 'next/link';
 
 export const metadata: Metadata = {
   title: 'Admin Product',
-}
+};
 
 interface Props {
   searchParams: Promise<{
@@ -28,7 +28,7 @@ interface Props {
 }
 
 const AdminProductsPage = async (props: Props) => {
-await requireAdmin();
+  await requireAdmin();
 
   const { page = 1, query = '', category = '' } = await props.searchParams;
 
@@ -89,7 +89,9 @@ await requireAdmin();
           ))}
         </TableBody>
       </Table>
-      {totalPages > 1 && <Pagination page={Number(page) || 1} totalPages={totalPages} />}
+      {totalPages > 1 && (
+        <Pagination page={Number(page) || 1} totalPages={totalPages} />
+      )}
     </div>
   );
 };

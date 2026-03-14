@@ -15,10 +15,9 @@ import {
 import { formatCurrency, formatDateTime, formatId } from '@/lib';
 import type { Order } from '@/types';
 import {
-  PayPalButtons,
-  PayPalScriptProvider,
-  usePayPalScriptReducer,
-} from '@paypal/react-paypal-js';
+  PayPalProvider,
+  PayPalOneTimePaymentButton,
+} from '@paypal/react-paypal-js/sdk-v6';
 
 import Image from 'next/image';
 import Link from 'next/link';
@@ -67,35 +66,37 @@ const OrderDetailsTable = ({
   const { fullName, streetAddress, city, postalCode, country } =
     shippingAddress;
 
-  const printLoadingState = () => {
-    const [{ isPending, isRejected }] = usePayPalScriptReducer();
-    let status = '';
+  // const printLoadingState = () => {
+  //   const [{ isPending, isRejected }] = usePayPalScriptReducer();
+  //   let status = '';
 
-    if (isPending) {
-      status = 'Loading PayPal...';
-    } else if (isRejected) {
-      status = 'Failed to load PayPal';
-    }
+  //   if (isPending) {
+  //     status = 'Loading PayPal...';
+  //   } else if (isRejected) {
+  //     status = 'Failed to load PayPal';
+  //   }
 
-    return status;
-  };
+  //   return status;
+  // };
 
   const handleCreatePayPalOrder = async () => {
-    const { success, message, data } = await createPayPalOrder(order.id);
+    const { success, message, orderId } = await createPayPalOrder(order.id);
 
-    if (!success || !data) {
+    if (!success || !orderId) {
       toast({
         variant: 'destructive',
         description: message,
       });
-      return '';
+      throw new Error(message);
     }
 
-    return data;
+    return { orderId };
   };
 
-  const handleApprovePayPalOrder = async (data: { orderID: string }) => {
-    const { success, message } = await approvePayPalOrder(order.id, data);
+  const handleApprovePayPalOrder = async (data: { orderId: string }) => {
+    const { success, message } = await approvePayPalOrder(order.id, {
+      orderID: data.orderId,
+    });
 
     toast({
       variant: success ? 'default' : 'destructive',
@@ -251,12 +252,18 @@ const OrderDetailsTable = ({
               {/* PayPal Payment */}
               {!isPaid && paymentMethod === 'PAYPAL' && (
                 <div>
-                  <PayPalScriptProvider options={{ clientId: paypalClientId }}>
-                    <PayPalButtons
+                  <PayPalProvider
+                    clientId={paypalClientId}
+                    pageType='checkout'
+                    components={['paypal-payments']}
+                  >
+                    <PayPalOneTimePaymentButton
+                      presentationMode='auto'
                       createOrder={handleCreatePayPalOrder}
                       onApprove={handleApprovePayPalOrder}
+                      onError={(data) => console.error(data)}
                     />
-                  </PayPalScriptProvider>
+                  </PayPalProvider>
                 </div>
               )}
 

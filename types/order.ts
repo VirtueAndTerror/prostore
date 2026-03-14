@@ -1,4 +1,5 @@
 import { insertOrderSchema, insertOrderItemSchema } from '@/lib';
+import { PaymentResult } from '@/types';
 import { z } from 'zod';
 
 export type OrderItem = z.infer<typeof insertOrderItemSchema>;
@@ -14,8 +15,8 @@ export type Order = z.infer<typeof insertOrderSchema> & {
   isDelivered: boolean;
   deliveredAt: Date | null;
   orderItems: OrderItem[];
-  user: { id: string; name: string; email: string | null };
-  // paymentResult: PaymentResult | null;
+  user: { name: string; email: string | null };
+  paymentResult: PaymentResult | null;
 };
 
 export type SalesData = {

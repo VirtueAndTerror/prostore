@@ -15,7 +15,9 @@ import {
 import Pagination from '@/components/shared/pagination';
 import DeleteDialog from '@/components/shared/delete-dialog';
 
-export const metadata: Metadata = { title: 'Admin Orders' };
+export const metadata: Metadata = {
+  title: 'Admin Orders',
+};
 
 interface Props {
   searchParams: Promise<{ page?: string; query?: string }>;
@@ -29,7 +31,7 @@ const AdminOrdersPage = async ({ searchParams }: Props) => {
   const { data, totalPages } = await getAllOrders({
     page: Number(page),
     query,
-    // limit: 2,
+    limit: 4,
   });
 
   return (

@@ -61,8 +61,7 @@ export const REVIEW_DEFAULT_VALUES = {
   rating: 0,
 };
 
-// TODO: refactor code to follow constants convention ex. ['PAYPAL', 'STRIPE', 'CASH_ON_DELIVERY']
-
+// Payments Config
 export const PAYMENT_METHODS = process.env.PAYMENT_METHODS
   ? process.env.PAYMENT_METHODS.split(', ')
   : ['PAYPAL', 'STRIPE', 'CASH_ON_DELIVERY'];
@@ -95,12 +94,14 @@ export function formatPaymentMethod(method?: string | null) {
   );
 }
 
+// Pagination Constants
 export const PAGE_SIZE = Number(process.env.PAGE_SIZE) || 4;
 
 export const USER_ROLES = process.env.USER_ROLES
   ? process.env.USER_ROLES.split(', ')
   : new Array('admin', 'user');
 
+//
 export const PRICES_OPTS = [
   {
     name: '$1 to $50',
@@ -127,3 +128,6 @@ export const PRICES_OPTS = [
 export const RATINGS_OPTS = [4, 3, 2, 1] as const;
 
 export const SORT_OPTS = ['newest', 'lowest', 'highest', 'rating'] as const;
+
+// Resend Config
+export const SENDER_EMAIL = process.env.SENDER_EMAIL || 'onboarding@resend.dev';

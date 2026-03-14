@@ -28,7 +28,8 @@ const calcPrice = (items: CartItem[]) => {
 export const addItemToCart = async (data: CartItem) => {
   try {
     // Check for the cart cookie
-    const sessionCartId = (await cookies()).get('sessionCartId')?.value;
+    const cookieStore = await cookies();
+    const sessionCartId = cookieStore.get('sessionCartId')?.value;
     if (!sessionCartId) throw new Error('Cart session not found');
 
     // Get session and user ID

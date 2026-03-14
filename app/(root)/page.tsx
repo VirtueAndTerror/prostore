@@ -1,8 +1,9 @@
-// import { Button } from '@/components/ui/button';
-import ProductList from '@/components/shared/product/product-list';
 import ProductCarousel from '@/components/shared/product/product-carousel';
-import { getLatestProducts, getFeaturedProducts } from '@/lib/actions/';
+import ProductList from '@/components/shared/product/product-list';
 import ViewAllProductsButton from '@/components/view-all-products-button';
+import { getFeaturedProducts, getLatestProducts } from '@/lib/actions/';
+import IconBoxes from '@/components/icon-boxes';
+import DealCountdown from '@/components/deal-countdown';
 
 // -- Testing the loading spinner
 // const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,6 +22,8 @@ const Homepage = async () => {
       )}
       <ProductList products={latestProducts} title='Newest Arrivals' />;
       <ViewAllProductsButton />
+      <DealCountdown />
+      <IconBoxes />
     </>
   );
 };

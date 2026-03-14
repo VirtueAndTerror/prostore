@@ -52,7 +52,8 @@ export async function signOutUser() {
       await prisma.cart.delete({ where: { id: currentCart.id } });
 
       // Delete corresponing cart from cookie
-      (await cookies()).delete('sessionCartId');
+      const cookieStore = await cookies();
+      cookieStore.delete('sessionCartId');
     }
   } catch (error) {
     console.error('Error deleting cart on sign out:', error);
