@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/hooks/use-toast';
 import { addItemToCart, removeItemFromCart } from '@/lib/actions';
-import { Cart, CartItem } from '@/types';
+import type { Cart, CartItem } from '@/types';
 import { Loader, Minus, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useTransition } from 'react';
@@ -71,7 +71,7 @@ const AddToCart = ({ item, cart }: Props) => {
 
   // Check if item is in cart
   const itemInCart = cart?.items.find((i) => i.productId === item.productId);
-  const { qty } = itemInCart?.qty ? itemInCart : { qty: 0 };
+  const { qty } = itemInCart ?? { qty: 0 };
 
   return itemInCart ? (
     <>

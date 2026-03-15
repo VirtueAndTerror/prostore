@@ -11,6 +11,8 @@ export const LATEST_PRODUCTS_LIMIT = Number(
   process.env.LATEST_PRODUCTS_LIMIT || 4,
 );
 
+export const FEATURED_PRODUCTS_LIMIT = 4;
+
 // Forms default values
 export const SIGN_IN_DEFAULT_VALUES = {
   email: '',

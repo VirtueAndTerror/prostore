@@ -1,24 +1,35 @@
 'use server';
 
 import { auth, signIn, signOut } from '@/auth';
-import { cookies } from 'next/headers';
 import { prisma } from '@/db/prisma';
 import { Prisma } from '@/lib/generated/prisma';
+import { ShippingAddress } from '@/types';
 import { hashSync } from 'bcrypt-ts-edge';
+import { revalidatePath } from 'next/cache';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
+import { cookies } from 'next/headers';
+import { z } from 'zod';
+import { PAGE_SIZE } from '../constants';
+import { formatError } from '../utils';
 import {
-  signInFormSchema,
-  signUpFormSchema,
   paymentMethodSchema,
   shippingAddressSchema,
+  signInFormSchema,
+  signUpFormSchema,
   updateUserSchema,
 } from '../validators';
-import { formatError } from '../utils';
-import { ShippingAddress } from '@/types';
-import { z } from 'zod';
 import { getMyCart } from './cart.actions';
-import { PAGE_SIZE } from '../constants';
-import { revalidatePath } from 'next/cache';
+
+type UserActionResult = { success: boolean; message: string };
+
+async function requireCurrentUser() {
+  const session = await auth();
+  const user = await prisma.user.findUnique({
+    where: { id: session?.user?.id },
+  });
+  if (!user) throw new Error('User not found');
+  return user;
+}
 
 // Sign in the user with credentials
 export async function signInWithCredentials(
@@ -34,11 +45,10 @@ export async function signInWithCredentials(
     await signIn('credentials', user);
 
     return { success: true, message: 'Signed in successfully' };
-  } catch (error) {
+  } catch (error: unknown) {
     if (isRedirectError(error)) {
       throw error;
     }
-
     return { success: false, message: 'Invalid email or password' };
   }
 }
@@ -46,23 +56,24 @@ export async function signInWithCredentials(
 // Sign Out user
 export async function signOutUser() {
   try {
-    // Get user's cart and delete it.
     const currentCart = await getMyCart();
     if (currentCart?.id) {
       await prisma.cart.delete({ where: { id: currentCart.id } });
-
-      // Delete corresponing cart from cookie
-      const cookieStore = await cookies();
-      cookieStore.delete('sessionCartId');
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error deleting cart on sign out:', error);
+  } finally {
+    const cookieStore = await cookies();
+    cookieStore.delete('sessionCartId');
   }
   await signOut();
 }
 
 // Sign Up user
-export async function signUpUser(prevState: unknown, formData: FormData) {
+export async function signUpUser(
+  prevState: unknown,
+  formData: FormData,
+): Promise<UserActionResult> {
   try {
     const user = signUpFormSchema.parse({
       name: formData.get('name'),
@@ -74,35 +85,27 @@ export async function signUpUser(prevState: unknown, formData: FormData) {
     const { password: plainPassword, name, email } = user;
 
     // Hash the password before saving to database
-    user.password = hashSync(user.password, 10);
+    const hashedPassword = hashSync(user.password, 10);
 
     await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: user.password,
-      },
+      data: { name, email, password: hashedPassword },
     });
 
-    await signIn('credentials', {
-      email,
-      password: plainPassword,
-    });
+    await signIn('credentials', { email, password: plainPassword });
 
     return { success: true, message: 'User registered successfully' };
-  } catch (error) {
+  } catch (error: unknown) {
     if (isRedirectError(error)) {
       throw error;
     }
-
     console.error(error);
     return { success: false, message: formatError(error) };
   }
 }
 
-// Get user by ID
+// Get user by ID (excludes password)
 export const getUserById = async (id: string) => {
-  const user = await prisma.user.findUnique({ where: { id } });
+  const user = await prisma.user.findUnique({ where: { id }, omit: { password: true } });
 
   if (!user) {
     throw new Error('User not found with the provided ID');
@@ -112,16 +115,11 @@ export const getUserById = async (id: string) => {
 };
 
 // Update user's address
-export const updateUserAddress = async (data: ShippingAddress) => {
+export const updateUserAddress = async (
+  data: ShippingAddress,
+): Promise<UserActionResult> => {
   try {
-    const session = await auth();
-
-    const currentUser = await prisma.user.findUnique({
-      where: { id: session?.user?.id },
-    });
-
-    if (!currentUser) throw new Error('User Not Found');
-
+    const currentUser = await requireCurrentUser();
     const address = shippingAddressSchema.parse(data);
 
     await prisma.user.update({
@@ -129,31 +127,18 @@ export const updateUserAddress = async (data: ShippingAddress) => {
       data: { address },
     });
 
-    return {
-      success: true,
-      message: 'User updated successfully',
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: formatError(error),
-    };
+    return { success: true, message: 'User updated successfully' };
+  } catch (error: unknown) {
+    return { success: false, message: formatError(error) };
   }
 };
 
 // Update user's payment method
 export const updateUserPaymentMethod = async (
   data: z.infer<typeof paymentMethodSchema>,
-) => {
+): Promise<UserActionResult> => {
   try {
-    const session = await auth();
-
-    const currentUser = await prisma.user.findFirst({
-      where: { id: session?.user?.id },
-    });
-
-    if (!currentUser) throw new Error('User Not Found');
-
+    const currentUser = await requireCurrentUser();
     const paymentMethod = paymentMethodSchema.parse(data);
 
     await prisma.user.update({
@@ -161,44 +146,27 @@ export const updateUserPaymentMethod = async (
       data: { paymentMethod: paymentMethod.type },
     });
 
-    return {
-      success: true,
-      message: 'User updateded successfully',
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: formatError(error),
-    };
+    return { success: true, message: 'User updated successfully' };
+  } catch (error: unknown) {
+    return { success: false, message: formatError(error) };
   }
 };
 
-export const updateProfile = async (user: { name: string; email: string }) => {
+export const updateProfile = async (
+  user: { name: string; email: string },
+): Promise<UserActionResult> => {
   try {
-    const session = await auth();
-    const currentUser = await prisma.user.findUnique({
-      where: { id: session?.user?.id },
-    });
-
-    if (!currentUser) {
-      throw new Error('User with the given credentials was not found');
-    }
+    const currentUser = await requireCurrentUser();
 
     await prisma.user.update({
       where: { id: currentUser.id },
       data: { name: user.name },
     });
 
-    return {
-      success: true,
-      message: 'User updated successfully',
-    };
-  } catch (error) {
+    return { success: true, message: 'User updated successfully' };
+  } catch (error: unknown) {
     console.error(error);
-    return {
-      succsess: false,
-      message: formatError(error),
-    };
+    return { success: false, message: formatError(error) };
   }
 };
 
@@ -215,11 +183,11 @@ export const getAllUsers = async ({
   const queryFilter: Prisma.UserWhereInput =
     query && query !== 'all'
       ? {
-          name: {
-            contains: query,
-            mode: 'insensitive',
-          } as Prisma.StringFilter,
-        }
+        name: {
+          contains: query,
+          mode: 'insensitive',
+        } as Prisma.StringFilter,
+      }
       : {};
 
   const data = await prisma.user.findMany({
@@ -229,7 +197,7 @@ export const getAllUsers = async ({
     skip: (page - 1) * limit,
   });
 
-  const dataCount = await prisma.user.count();
+  const dataCount = await prisma.user.count({ where: { ...queryFilter } });
   const totalPages = Math.ceil(dataCount / limit);
 
   return {
@@ -239,49 +207,33 @@ export const getAllUsers = async ({
 };
 
 // Delete
-export const deleteUser = async (userId: string) => {
+export const deleteUser = async (
+  userId: string,
+): Promise<UserActionResult> => {
   try {
     await prisma.user.delete({ where: { id: userId } });
-
     revalidatePath('/admin/users');
-
-    return {
-      success: true,
-      message: 'User deleted successfully',
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: formatError(error),
-    };
+    return { success: true, message: 'User deleted successfully' };
+  } catch (error: unknown) {
+    return { success: false, message: formatError(error) };
   }
 };
 
 // Update
-
-export const updateUser = async (user: z.infer<typeof updateUserSchema>) => {
+export const updateUser = async (
+  user: z.infer<typeof updateUserSchema>,
+): Promise<UserActionResult> => {
   try {
     const { id, name, role } = user;
 
     await prisma.user.update({
       where: { id },
-      data: {
-        id,
-        name,
-        role,
-      },
+      data: { name, role },
     });
 
     revalidatePath('/admin/users');
-
-    return {
-      success: true,
-      message: 'User updated successfully',
-    };
-  } catch (error) {
-    return {
-      success: false,
-      message: formatError(error),
-    };
+    return { success: true, message: 'User updated successfully' };
+  } catch (error: unknown) {
+    return { success: false, message: formatError(error) };
   }
 };

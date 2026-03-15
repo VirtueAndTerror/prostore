@@ -1,20 +1,47 @@
 'use server';
 
-import { cookies } from 'next/headers';
-import { Cart, CartItem } from '@/types';
-import { convertToPlainObject, formatError, round2Decimals } from '../utils';
 import { auth } from '@/auth';
 import { prisma } from '@/db/prisma';
-import { cartItemsSchema, insertCartSchema } from '../validators';
+import type { Cart, CartItem } from '@/types';
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
+import { convertToPlainObject, formatError, round2Decimals } from '../utils';
+import { cartItemsSchema, insertCartSchema } from '../validators';
+
+const FREE_SHIPPING_THRESHOLD = 100;
+const SHIPPING_PRICE = 10;
+const TAX_RATE = 0.15;
+
+type CartActionResult = { success: boolean; message: string };
+
+type CartContext = {
+  sessionCartId: string | null;
+  userId: string | undefined;
+};
+
+async function getCartContext(): Promise<CartContext> {
+  const cookieStore = await cookies();
+  const sessionCartId = cookieStore.get('sessionCartId')?.value ?? null;
+  const session = await auth();
+  const userId = session?.user?.id;
+
+  return { sessionCartId, userId };
+}
+
+function validateStock(product: { stock: number }, requestedQty: number): void {
+  if (product.stock < requestedQty) {
+    throw new Error('Not enough stock available');
+  }
+}
 
 const calcPrice = (items: CartItem[]) => {
   const itemsPrice = round2Decimals(
-      items.reduce((acc, item) => acc + Number(item.price) * item.qty, 0),
+    items.reduce((acc, item) => acc + Number(item.price) * item.qty, 0),
+  ),
+    shippingPrice = round2Decimals(
+      itemsPrice > FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_PRICE,
     ),
-    // Free shipping for orders over $100
-    shippingPrice = round2Decimals(itemsPrice > 100 ? 0 : 10),
-    taxPrice = round2Decimals(0.15 * itemsPrice),
+    taxPrice = round2Decimals(TAX_RATE * itemsPrice),
     totalPrice = round2Decimals(itemsPrice + taxPrice + shippingPrice);
 
   return {
@@ -25,16 +52,10 @@ const calcPrice = (items: CartItem[]) => {
   };
 };
 
-export const addItemToCart = async (data: CartItem) => {
+export const addItemToCart = async (data: CartItem): Promise<CartActionResult> => {
   try {
-    // Check for the cart cookie
-    const cookieStore = await cookies();
-    const sessionCartId = cookieStore.get('sessionCartId')?.value;
+    const { sessionCartId, userId } = await getCartContext();
     if (!sessionCartId) throw new Error('Cart session not found');
-
-    // Get session and user ID
-    const session = await auth();
-    const userId = session?.user?.id;
 
     // Get cart
     const cart = await getMyCart();
@@ -50,7 +71,7 @@ export const addItemToCart = async (data: CartItem) => {
     if (!product) throw new Error('Product not found');
 
     if (!cart) {
-      // Create new cart object
+      validateStock(product, item.qty);
       const newCart = insertCartSchema.parse({
         userId,
         sessionCartId,
@@ -69,42 +90,33 @@ export const addItemToCart = async (data: CartItem) => {
         message: `${product.name} added to cart`,
       };
     } else {
-      // update existing cart
-      const existItem = cart.items.find((i) => i.productId === item.productId);
+      const itemExistsInCart = cart.items.find((i) => i.productId === item.productId);
 
-      if (existItem) {
-        // Check stock
-        if (existItem.qty + 1 > product.stock) {
-          throw new Error('No enought stock available');
-        }
-
-        // Increase the qty
-        cart.items.find((i) => i.productId === item.productId)!.qty =
-          existItem.qty + 1;
+      let updatedItems: CartItem[];
+      if (itemExistsInCart) {
+        validateStock(product, itemExistsInCart.qty + 1);
+        updatedItems = cart.items.map((i) =>
+          i.productId === item.productId ? { ...i, qty: i.qty + 1 } : i,
+        );
       } else {
-        // If item does not exist in cart
-        // Check stock
-        if (product.stock < 1) throw new Error('No enought stock available');
-
-        // Add item to the cart.items
-        cart.items.push(item);
+        validateStock(product, 1);
+        updatedItems = [...cart.items, item];
       }
 
       await prisma.cart.update({
         where: { sessionCartId: cart.sessionCartId },
-        data: { items: cart.items, ...calcPrice(cart.items) },
+        data: { items: updatedItems, ...calcPrice(updatedItems) },
       });
 
       revalidatePath(`/product/${product.slug}`);
 
       return {
         success: true,
-        message: `${product.name} ${
-          existItem ? 'quantity updated in' : 'added to'
-        } cart`,
+        message: `${product.name} ${itemExistsInCart ? 'quantity updated in' : 'added to'
+          } cart`,
       };
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       message: formatError(error),
@@ -112,19 +124,10 @@ export const addItemToCart = async (data: CartItem) => {
   }
 };
 
-/* TODO - REFACTOR*/
-
 export async function getMyCart(): Promise<Cart | null> {
   try {
-    // Check for the cart cookie
-    const sessionCartId = (await cookies()).get('sessionCartId')?.value;
-    if (!sessionCartId) {
-      return null;
-    }
-
-    // Get session and user ID
-    const session = await auth();
-    const userId = session?.user?.id;
+    const { sessionCartId, userId } = await getCartContext();
+    if (!sessionCartId) return null;
 
     const cart = await prisma.cart.findFirst({
       where: userId ? { userId } : { sessionCartId },
@@ -141,60 +144,55 @@ export async function getMyCart(): Promise<Cart | null> {
       taxPrice: cart.taxPrice.toString(),
       shippingPrice: cart.shippingPrice.toString(),
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(formatError(error));
     return null;
   }
 }
 
-export const removeItemFromCart = async (productId: string) => {
+export const removeItemFromCart = async (
+  productId: string,
+): Promise<CartActionResult> => {
   try {
-    // Get Product
     const product = await prisma.product.findFirst({
       where: { id: productId },
+      select: { slug: true, name: true },
     });
 
     if (!product) throw new Error('Product not found');
 
-    // Get user's cart
     const cart = await getMyCart();
     if (!cart) throw new Error('Cart not found');
 
-    // Check for item in cart
     const itemInCart = cart.items.find((i) => i.productId === productId);
     if (!itemInCart) throw new Error('Item not found');
 
-    // Check if there is only one in qty
-    if (itemInCart.qty === 1) {
-      // Remove form cart
-      // Returns an array with all items that don't match the productId
-      cart.items = cart.items.filter(
-        (i) => i.productId !== itemInCart.productId,
-      );
-    } else {
-      // Decrease qty
-      const foundProduct = cart.items.find((i) => i.productId === productId);
-      if (foundProduct) {
-        foundProduct.qty = itemInCart.qty - 1;
-      }
-    }
+    const updatedItems: CartItem[] =
+      itemInCart.qty === 1
+        ? cart.items.filter((i) => i.productId !== productId)
+        : cart.items.map((i) =>
+          i.productId === productId
+            ? { ...i, qty: i.qty - 1 }
+            : i,
+        );
 
-    // Update cart in database
     await prisma.cart.update({
       where: { sessionCartId: cart.sessionCartId },
       data: {
-        items: cart.items,
-        ...calcPrice(cart.items),
+        items: updatedItems,
+        ...calcPrice(updatedItems),
       },
     });
 
     revalidatePath(`/product/${product.slug}`);
 
-    return {
-      success: true,
-      message: `${product.name} was removed from cart`,
-    };
-  } catch (error) {
+    const message =
+      itemInCart.qty === 1
+        ? `${product.name} was removed from cart`
+        : `${product.name} quantity decreased in cart`;
+
+    return { success: true, message };
+  } catch (error: unknown) {
     return {
       success: false,
       message: formatError(error),

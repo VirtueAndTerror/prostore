@@ -1,4 +1,4 @@
-import {DefaultSession} from 'next-auth';
+import type { DefaultSession } from 'next-auth';
 
 // Extend NextAuth types with application-specific user fields.
 //
@@ -8,16 +8,16 @@ import {DefaultSession} from 'next-auth';
 // These fields are added on top of NextAuth's default session user shape.
 
 declare module 'next-auth' {
-    export interface Session {
-        user: {
-            id: string;
-            /**
-             * User role used for authorization checks.
-             *
-             * This is stored on the session/jwt payload and can be null for unauthenticated users.
-             * Keep this in sync with `prisma/schema.prisma` `User.role` values.
-             */
-            role: string | null;
-        } & DefaultSession['user'];
-    }
+  export interface Session {
+    user: {
+      id: string;
+      /**
+       * User role used for authorization checks.
+       *
+       * This is stored on the session/jwt payload and can be null for unauthenticated users.
+       * Keep this in sync with `prisma/schema.prisma` `User.role` values.
+       */
+      role: string | null;
+    } & DefaultSession['user'];
+  }
 }

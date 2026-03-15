@@ -27,7 +27,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { insertReviewSchema } from '@/lib';
-import { createUpdateReview, getReviewByProductId } from '@/lib/actions';
+import { createUpdateReview, getUserReviewForProduct } from '@/lib/actions';
 import { REVIEW_DEFAULT_VALUES } from '@/lib/constants';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { StarIcon } from 'lucide-react';
@@ -66,7 +66,7 @@ const ReviewForm = ({ userId, productId, onReviewSubmitted }: Props) => {
     setValue('userId', userId);
 
     // Look up for already existing review
-    const review = await getReviewByProductId(productId);
+    const review = await getUserReviewForProduct(productId);
     // Set pre-fill the form with retrieved values
     if (review) {
       setValue('title', review.title);

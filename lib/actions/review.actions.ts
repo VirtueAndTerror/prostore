@@ -1,30 +1,38 @@
 'use server';
 
+import { requireAuthenticatedUserId } from '@/lib/auth-utils';
 import { formatError } from '../utils';
-import { auth } from '@/auth';
 import { insertReviewSchema } from '../validators';
 import { prisma } from '@/db/prisma';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { Review } from '@/types';
 
-// Create & Update a Review
-export const createUpdateReview = async (
+type ReviewWithUser = Review & { user: { name: string } };
+
+type ReviewActionResult = {
+  success: boolean;
+  message: string;
+  review?: ReviewWithUser;
+};
+
+// Create or update a review for the current user and product
+export async function createUpdateReview(
   data: z.infer<typeof insertReviewSchema>,
-) => {
+): Promise<ReviewActionResult> {
   try {
-    const session = await auth();
-    if (!session) throw new Error('User not authenticated');
+    const userId = await requireAuthenticatedUserId();
 
     // Validate and store the review
     const review = insertReviewSchema.parse({
       ...data,
-      userId: session.user?.id,
+      userId,
     });
 
-    // Get product that is being reviewed
+    // Get product that is being reviewed (only id and slug needed)
     const product = await prisma.product.findUnique({
       where: { id: review.productId },
+      select: { id: true, slug: true },
     });
     if (!product) throw new Error('Product not found');
 
@@ -36,7 +44,7 @@ export const createUpdateReview = async (
       },
     });
 
-    let savedReview: Review | null = null;
+    let savedReview: ReviewWithUser | null = null;
 
     await prisma.$transaction(async (tx) => {
       if (reviewExists) {
@@ -80,38 +88,34 @@ export const createUpdateReview = async (
     return {
       success: true,
       message: `Review ${reviewExists ? 'updated' : 'created'} successfully`,
-      review: savedReview,
+      review: savedReview ?? undefined,
     };
-  } catch (error) {
+  } catch (error: unknown) {
     return {
       success: false,
       message: formatError(error),
     };
   }
-};
+}
 
-// Get All Reviews
-export const getReviews = async (productId: string): Promise<Review[]> => {
-  const data = await prisma.review.findMany({
+// Get all reviews for a product
+export async function getReviews(productId: string): Promise<ReviewWithUser[]> {
+  return prisma.review.findMany({
     where: { productId },
     include: { user: { select: { name: true } } },
     orderBy: { createdAt: 'desc' },
   });
+}
 
-  if (!data)
-    throw new Error('Reviews of the product with the given ID not found');
-
-  return data;
-};
-
-export async function getReviewByProductId(
+// Get the current user's review for a product
+export async function getUserReviewForProduct(
   productId: string,
 ): Promise<Review | null> {
-  const session = await auth();
-  if (!session) throw new Error('User not authenticated');
+  const userId = await requireAuthenticatedUserId().catch(() => null);
+  if (!userId) return null;
 
   const data = await prisma.review.findFirst({
-    where: { productId, userId: session.user?.id },
+    where: { productId, userId },
   });
 
   return data;

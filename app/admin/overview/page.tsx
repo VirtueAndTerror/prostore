@@ -1,4 +1,4 @@
-import { auth } from '@/auth';
+import StatCard from '@/components/admin/stat-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -8,13 +8,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatCurrency, formatDateTime, formatNumber } from '@/lib';
+import { formatCurrency, formatDateTime } from '@/lib';
 import { getOrderSummary } from '@/lib/actions';
+import { requireAdmin } from '@/lib/auth-guard';
 import { BadgeDollarSign, Barcode, CreditCard, Users } from 'lucide-react';
 import { Metadata } from 'next';
 import Link from 'next/link';
 import Charts from './charts';
-import { requireAdmin } from '@/lib/auth-guard';
 
 export const metadata: Metadata = {
   title: 'Admin Dashboard',
@@ -22,10 +22,6 @@ export const metadata: Metadata = {
 
 const AdminOverviewPage = async () => {
   await requireAdmin();
-
-  const session = await auth();
-
-  if (session?.user?.role !== 'admin') throw new Error('User not authorized');
 
   const {
     totalSales,
@@ -36,52 +32,21 @@ const AdminOverviewPage = async () => {
     latestSales,
   } = await getOrderSummary();
 
-  // TODO: Create CustomCard Component to simplify this code.
+  const totalRevenue = Number(totalSales._sum.totalPrice ?? 0);
 
   return (
     <div className='space-y-2'>
       <h1 className='h2-bold'>Dashboard</h1>
       <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-4'>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0'>
-            <CardTitle className='text-sm font-medium'>Total Revenue</CardTitle>
-            <BadgeDollarSign />
-          </CardHeader>
-          <CardContent>
-            <div className='text-xl font-bold'>
-              {formatCurrency(totalSales._sum.totalPrice?.toString() || 0)}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0'>
-            <CardTitle className='text-sm font-medium'>Sales</CardTitle>
-            <CreditCard />
-          </CardHeader>
-          <CardContent>
-            <div className='text-xl font-bold'>{formatNumber(ordersCount)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0'>
-            <CardTitle className='text-sm font-medium'>Cusotmers</CardTitle>
-            <Users />
-          </CardHeader>
-          <CardContent>
-            <div className='text-xl font-bold'>{formatNumber(usersCount)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className='flex flex-row items-center justify-between space-y-0'>
-            <CardTitle className='text-sm font-medium'>Products</CardTitle>
-            <Barcode />
-          </CardHeader>
-          <CardContent>
-            <div className='text-xl font-bold'>
-              {formatNumber(productsCount)}
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard
+          title='Total Revenue'
+          value={totalRevenue}
+          icon={BadgeDollarSign}
+          format='currency'
+        />
+        <StatCard title='Sales' value={ordersCount} icon={CreditCard} />
+        <StatCard title='Customers' value={usersCount} icon={Users} />
+        <StatCard title='Products' value={productsCount} icon={Barcode} />
       </div>
       <div className='grid gap-4 md:grid-cols-2 lg:grid-cols-7'>
         <Card className='col-span-4'>
@@ -107,20 +72,34 @@ const AdminOverviewPage = async () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {latestSales.map(({ user, createdAt, totalPrice, id }) => (
-                  <TableRow key={id}>
-                    <TableCell>
-                      {user?.name ? user.name : 'Deleted User'}
-                    </TableCell>
-                    <TableCell>{formatDateTime(createdAt).dateOnly}</TableCell>
-                    <TableCell>{formatCurrency(totalPrice)}</TableCell>
-                    <TableCell>
-                      <Link href={`/order/${id}`}>
-                        <span className='px-2'>Details</span>
-                      </Link>
+                {latestSales.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={4}
+                      className='h-24 text-center text-muted-foreground'
+                    >
+                      No recent sales
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  latestSales.map(({ user, createdAt, totalPrice, id }) => (
+                    <TableRow key={id}>
+                      <TableCell>
+                        {user?.name ?? 'Deleted User'}
+                      </TableCell>
+                      <TableCell>{formatDateTime(createdAt).dateOnly}</TableCell>
+                      <TableCell>{formatCurrency(totalPrice)}</TableCell>
+                      <TableCell>
+                        <Link
+                          href={`/order/${id}`}
+                          className='text-primary underline-offset-4 hover:underline'
+                        >
+                          Details
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </CardContent>
