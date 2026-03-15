@@ -3,7 +3,6 @@ import { PrismaAdapter } from '@auth/prisma-adapter';
 import { compare } from 'bcrypt-ts-edge';
 import NextAuth, { NextAuthConfig } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 type SafeUser = {
@@ -71,7 +70,7 @@ export const config: NextAuthConfig = {
     }),
   ],
   callbacks: {
-    // Populate token fields from the user fields
+    // Token logic: Populate token fields from the user fields
     async jwt({ token, user, trigger, session }: any) {
       if (user) {
         token.sub = user.id;
@@ -93,29 +92,6 @@ export const config: NextAuthConfig = {
         // Propagate name updates triggered via session update
         if (session?.user?.name && trigger === 'update') {
           token.name = session.user.name;
-        }
-
-        // Move this from here
-        if (trigger === 'signIn' || trigger === 'signUp') {
-          const cookieStore = await cookies();
-          const sessionCartId = cookieStore.get('sessionCartId')?.value;
-
-          if (sessionCartId) {
-            const sessionCart = await prisma.cart.findUnique({
-              where: { sessionCartId },
-            });
-
-            if (sessionCart) {
-              // Delete current user cart
-              await prisma.cart.deleteMany({ where: { userId: user.id } });
-
-              // Assign new cart
-              await prisma.cart.update({
-                where: { id: sessionCart.id },
-                data: { userId: user.id },
-              });
-            }
-          }
         }
       }
       return token;

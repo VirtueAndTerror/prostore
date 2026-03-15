@@ -36,8 +36,8 @@ function validateStock(product: { stock: number }, requestedQty: number): void {
 
 const calcPrice = (items: CartItem[]) => {
   const itemsPrice = round2Decimals(
-    items.reduce((acc, item) => acc + Number(item.price) * item.qty, 0),
-  ),
+      items.reduce((acc, item) => acc + Number(item.price) * item.qty, 0),
+    ),
     shippingPrice = round2Decimals(
       itemsPrice > FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_PRICE,
     ),
@@ -52,7 +52,9 @@ const calcPrice = (items: CartItem[]) => {
   };
 };
 
-export const addItemToCart = async (data: CartItem): Promise<CartActionResult> => {
+export const addItemToCart = async (
+  data: CartItem,
+): Promise<CartActionResult> => {
   try {
     const { sessionCartId, userId } = await getCartContext();
     if (!sessionCartId) throw new Error('Cart session not found');
@@ -90,7 +92,9 @@ export const addItemToCart = async (data: CartItem): Promise<CartActionResult> =
         message: `${product.name} added to cart`,
       };
     } else {
-      const itemExistsInCart = cart.items.find((i) => i.productId === item.productId);
+      const itemExistsInCart = cart.items.find(
+        (i) => i.productId === item.productId,
+      );
 
       let updatedItems: CartItem[];
       if (itemExistsInCart) {
@@ -112,8 +116,9 @@ export const addItemToCart = async (data: CartItem): Promise<CartActionResult> =
 
       return {
         success: true,
-        message: `${product.name} ${itemExistsInCart ? 'quantity updated in' : 'added to'
-          } cart`,
+        message: `${product.name} ${
+          itemExistsInCart ? 'quantity updated in' : 'added to'
+        } cart`,
       };
     }
   } catch (error: unknown) {
@@ -129,9 +134,44 @@ export async function getMyCart(): Promise<Cart | null> {
     const { sessionCartId, userId } = await getCartContext();
     if (!sessionCartId) return null;
 
-    const cart = await prisma.cart.findFirst({
-      where: userId ? { userId } : { sessionCartId },
+    let cart = await prisma.cart.findUnique({
+      where: { sessionCartId },
     });
+
+    // If logged in, attach cart to user
+    if (userId && cart && !cart.userId) {
+      const userCart = await prisma.cart.findFirst({
+        where: { userId },
+      });
+
+      if (!userCart) {
+        // attach guest cart to user
+        await prisma.cart.update({
+          where: { id: cart.id },
+          data: { userId },
+        });
+      } else {
+        // merge carts
+        const mergedItems = [
+          ...(userCart.items as CartItem[]),
+          ...(userCart.items as CartItem[]),
+        ];
+
+        await prisma.cart.update({
+          where: { id: userCart.id },
+          data: {
+            items: mergedItems,
+            ...calcPrice(mergedItems),
+          },
+        });
+
+        await prisma.cart.delete({ where: { id: cart.id } });
+
+        cart = await prisma.cart.findUnique({
+          where: { id: userCart.id },
+        });
+      }
+    }
 
     if (!cart) return null;
 
@@ -171,10 +211,8 @@ export const removeItemFromCart = async (
       itemInCart.qty === 1
         ? cart.items.filter((i) => i.productId !== productId)
         : cart.items.map((i) =>
-          i.productId === productId
-            ? { ...i, qty: i.qty - 1 }
-            : i,
-        );
+            i.productId === productId ? { ...i, qty: i.qty - 1 } : i,
+          );
 
     await prisma.cart.update({
       where: { sessionCartId: cart.sessionCartId },
