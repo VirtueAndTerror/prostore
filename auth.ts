@@ -126,6 +126,16 @@ export const config: NextAuthConfig = {
       if (!auth && protectedPaths.some((path) => path.test(pathname)))
         return false;
 
+      // If no authenticated user but a sessionCartId cookie exists,
+      // clear it so a fresh one is issued - prevents cart leaking between users
+      if (!auth && request.cookies.get('sessionCartId')) {
+        const res = NextResponse.next();
+        res.cookies.delete('sessionCartId');
+        const sessionCartId = crypto.randomUUID();
+        res.cookies.set('sessionCartId', sessionCartId);
+        return res;
+      }
+
       // If the request already has sessionCartId, continue.
       if (request.cookies.get('sessionCartId')) return true;
 

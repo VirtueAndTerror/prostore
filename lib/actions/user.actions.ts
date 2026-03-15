@@ -19,6 +19,7 @@ import {
   updateUserSchema,
 } from '../validators';
 import { getMyCart } from './cart.actions';
+import { getAuthenticatedUserId } from '../auth-utils';
 
 type UserActionResult = { success: boolean; message: string };
 
@@ -56,17 +57,25 @@ export async function signInWithCredentials(
 // Sign Out user
 export async function signOutUser() {
   try {
-    const currentCart = await getMyCart();
-    if (currentCart?.id) {
-      await prisma.cart.delete({ where: { id: currentCart.id } });
-    }
-  } catch (error: unknown) {
-    console.error('Error deleting cart on sign out:', error);
-  } finally {
+    const userId = await getAuthenticatedUserId();
     const cookieStore = await cookies();
+    const sessionCartId = cookieStore.get('sessionCartId')?.value;
+    // Delete All carts associated with this user OR this session
+
+    await prisma.cart.deleteMany({
+      where: {
+        OR: [{ userId }, ...(sessionCartId ? [{ sessionCartId }] : [])],
+      },
+    });
+
     cookieStore.delete('sessionCartId');
+    await signOut();
+  } catch (error: unknown) {
+    if (isRedirectError(error)) {
+      throw error;
+    }
+    console.error('Error during sign out:', error);
   }
-  await signOut();
 }
 
 // Sign Up user
@@ -105,7 +114,10 @@ export async function signUpUser(
 
 // Get user by ID (excludes password)
 export const getUserById = async (id: string) => {
-  const user = await prisma.user.findUnique({ where: { id }, omit: { password: true } });
+  const user = await prisma.user.findUnique({
+    where: { id },
+    omit: { password: true },
+  });
 
   if (!user) {
     throw new Error('User not found with the provided ID');
@@ -152,9 +164,10 @@ export const updateUserPaymentMethod = async (
   }
 };
 
-export const updateProfile = async (
-  user: { name: string; email: string },
-): Promise<UserActionResult> => {
+export const updateProfile = async (user: {
+  name: string;
+  email: string;
+}): Promise<UserActionResult> => {
   try {
     const currentUser = await requireCurrentUser();
 
@@ -183,11 +196,11 @@ export const getAllUsers = async ({
   const queryFilter: Prisma.UserWhereInput =
     query && query !== 'all'
       ? {
-        name: {
-          contains: query,
-          mode: 'insensitive',
-        } as Prisma.StringFilter,
-      }
+          name: {
+            contains: query,
+            mode: 'insensitive',
+          } as Prisma.StringFilter,
+        }
       : {};
 
   const data = await prisma.user.findMany({
@@ -207,9 +220,7 @@ export const getAllUsers = async ({
 };
 
 // Delete
-export const deleteUser = async (
-  userId: string,
-): Promise<UserActionResult> => {
+export const deleteUser = async (userId: string): Promise<UserActionResult> => {
   try {
     await prisma.user.delete({ where: { id: userId } });
     revalidatePath('/admin/users');

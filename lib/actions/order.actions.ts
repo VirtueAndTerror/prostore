@@ -2,7 +2,7 @@
 
 import { prisma } from '@/db/prisma';
 import { sendPurchaseReciept } from '@/email';
-import { requireAuthenticatedUserId } from '@/lib/auth-utils';
+import { getAuthenticatedUserId } from '@/lib/auth-utils';
 import type {
   CartItem,
   PaymentResult,
@@ -32,7 +32,7 @@ type PayPalOrderActionResult = OrderActionResult & {
 // Main function - Create order and create order items
 export const createOrder = async (): Promise<OrderActionResult> => {
   try {
-    const userId = await requireAuthenticatedUserId();
+    const userId = await getAuthenticatedUserId();
 
     // Get cart and user data
     const [cart, user] = await Promise.all([getMyCart(), getUserById(userId)]);
@@ -83,21 +83,20 @@ export const createOrder = async (): Promise<OrderActionResult> => {
       const insertedOrder = await tx.order.create({ data: order });
 
       // Create order items from cart items
-      for (const item of cart.items as CartItem[]) {
+      for (const item of cart.items) {
         await tx.orderItem.create({
           data: {
             ...item,
-            price: item.price,
             orderId: insertedOrder.id,
           },
         });
       }
 
-      // CLear cart
+      // Clear cart items and reset totals
+      await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
       await tx.cart.update({
         where: { id: cart.id },
         data: {
-          items: [],
           itemsPrice: 0,
           shippingPrice: 0,
           totalPrice: 0,
@@ -319,7 +318,7 @@ export const getMyOrders = async ({
   limit?: number;
   page: number;
 }) => {
-  const userId = await requireAuthenticatedUserId();
+  const userId = await getAuthenticatedUserId();
 
   const data = await prisma.order.findMany({
     where: { userId },

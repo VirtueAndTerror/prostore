@@ -1,6 +1,6 @@
 'use server';
 
-import { requireAuthenticatedUserId } from '@/lib/auth-utils';
+import { getAuthenticatedUserId } from '@/lib/auth-utils';
 import { formatError } from '../utils';
 import { insertReviewSchema } from '../validators';
 import { prisma } from '@/db/prisma';
@@ -21,7 +21,7 @@ export async function createUpdateReview(
   data: z.infer<typeof insertReviewSchema>,
 ): Promise<ReviewActionResult> {
   try {
-    const userId = await requireAuthenticatedUserId();
+    const userId = await getAuthenticatedUserId();
 
     // Validate and store the review
     const review = insertReviewSchema.parse({
@@ -111,7 +111,7 @@ export async function getReviews(productId: string): Promise<ReviewWithUser[]> {
 export async function getUserReviewForProduct(
   productId: string,
 ): Promise<Review | null> {
-  const userId = await requireAuthenticatedUserId().catch(() => null);
+  const userId = await getAuthenticatedUserId().catch(() => null);
   if (!userId) return null;
 
   const data = await prisma.review.findFirst({
