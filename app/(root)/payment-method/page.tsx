@@ -1,5 +1,5 @@
-import { auth } from '@/auth';
 import CheckoutSteps from '@/components/shared/checkout-steps';
+import { getAuthenticatedUserId } from '@/lib/auth-utils';
 import { getUserById } from '@/lib/actions';
 import { Metadata } from 'next';
 import PaymentMethodForm from './payment-method-form';
@@ -9,16 +9,18 @@ export const metadata: Metadata = {
 };
 
 const PaymentMethodPage = async () => {
-  const session = await auth();
-  const userId = session?.user?.id;
+  // 1. Check authentication
+  const userId = await getAuthenticatedUserId();
 
-  if (!userId) throw new Error('User Not Found');
-
+  // 2. Fetch user by ID
   const { paymentMethod } = await getUserById(userId);
+
+  // 3. Set current step
+  const currentStep = 2;
 
   return (
     <>
-      <CheckoutSteps current={2} />
+      <CheckoutSteps current={currentStep} />
       <PaymentMethodForm paymentMethod={paymentMethod} />
     </>
   );

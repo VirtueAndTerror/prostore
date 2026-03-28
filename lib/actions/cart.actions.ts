@@ -5,54 +5,68 @@ import { prisma } from '@/db/prisma';
 import type { Cart, CartItem } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
-import { convertToPlainObject, formatError, round2Decimals } from '../utils';
+import { convertToPlainObject, formatError } from '../utils';
 import { cartItemsSchema } from '../validators';
+import { DEFAULT_PRICING_CONFIG } from '../constants';
 
-const FREE_SHIPPING_THRESHOLD = 100;
-const SHIPPING_PRICE = 10;
-const TAX_RATE = 0.15;
-
+// ----- Types -----
 type CartActionResult = { success: boolean; message: string };
+type PricingConfig = {
+  freeShippingThresholdCents: number;
+  shippingFlatRateCents: number;
+  taxRateBase: number;
+};
 
 type CartContext = {
   sessionCartId: string | null;
   userId: string | undefined;
 };
 
-// Helper to get the cart session ID from cookies and user ID from session
+// ----- Helpers -----
+/** Reads the sessionCartId cookie and the current auth session in one call. */
 async function getCartContext(): Promise<CartContext> {
   const cookieStore = await cookies();
   const sessionCartId = cookieStore.get('sessionCartId')?.value ?? null;
   const session = await auth();
-  const userId = session?.user?.id;
 
-  return { sessionCartId, userId };
+  return { sessionCartId, userId: session?.user?.id };
 }
-
+/** Throws if the product does not have enough stock for the requested quantity. */
 function validateStock(product: { stock: number }, requestedQty: number): void {
   if (product.stock < requestedQty) {
     throw new Error('Not enough stock available');
   }
 }
 
-// Calculate cart totals: items total, shipping (free over threshold), tax, and grand total
-const calcPrice = (items: CartItem[]) => {
-  const itemsPrice = round2Decimals(
-      items.reduce((acc, item) => acc + Number(item.price) * item.qty, 0),
-    ),
-    shippingPrice = round2Decimals(
-      itemsPrice > FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_PRICE,
-    ),
-    taxPrice = round2Decimals(TAX_RATE * itemsPrice),
-    totalPrice = round2Decimals(itemsPrice + taxPrice + shippingPrice);
+/**
+ * Derives cart price totals from an array of cart items.
+ * Shipping is free when the items subtotal exceeds FREE_SHIPPING_THRESHOLD.
+ * All values are returned as fixed-2-decimal strings for consistent serialisation.
+ */
+function calcPrice(items: CartItem[], config: PricingConfig) {
+  // 1 . Calculate the subtotal in CENTS
+  const itemsPriceCents = items.reduce((acc, item) => {
+    const itemCents = Math.round(Number(item.price) * 100);
+    return acc + (itemCents * item.qty)
+  }, 0);
 
+  // 2. Calculate Shipping in CENTS base on threshold
+  const shippingPriceCents = itemsPriceCents > config.freeShippingThresholdCents ? 0 : config.shippingFlatRateCents;
+
+  // 3. Calculate Tax in CENTS
+  const taxPriceCents = Math.round(itemsPriceCents * config.taxRateBase);
+
+  // 4. Calculate Total in CENTS
+  const totalPriceCents = itemsPriceCents + shippingPriceCents + taxPriceCents;
+
+  // 5. Convert back to decimal strings for Prisma/Responses
   return {
-    itemsPrice: itemsPrice.toFixed(2),
-    taxPrice: taxPrice.toFixed(2),
-    shippingPrice: shippingPrice.toFixed(2),
-    totalPrice: totalPrice.toFixed(2),
+    itemsPrice: (itemsPriceCents / 100).toFixed(2),
+    taxPrice: (taxPriceCents / 100).toFixed(2),
+    shippingPrice: (shippingPriceCents / 100).toFixed(2),
+    totalPrice: (totalPriceCents / 100).toFixed(2),
   };
-};
+}
 
 export const addItemToCart = async (
   data: CartItem,
@@ -120,6 +134,7 @@ export const addItemToCart = async (
         ...ci,
         price: ci.price.toString(),
       })) as CartItem[],
+      DEFAULT_PRICING_CONFIG
     );
 
     await prisma.cart.update({
@@ -131,9 +146,8 @@ export const addItemToCart = async (
 
     return {
       success: true,
-      message: `${product.name} ${
-        existingItem ? 'quantity updated in' : 'added to'
-      } cart`,
+      message: `${product.name} ${existingItem ? 'quantity updated in' : 'added to'
+        } cart`,
     };
   } catch (error: unknown) {
     return {
@@ -149,9 +163,9 @@ export async function getMyCart(): Promise<Cart | null> {
 
     let cart = sessionCartId
       ? await prisma.cart.findUnique({
-          where: { sessionCartId },
-          include: { items: true },
-        })
+        where: { sessionCartId },
+        include: { items: true },
+      })
       : null;
 
     // If no cart is found by session ID (e.g., after a guest cart was merged)
@@ -214,6 +228,7 @@ export async function getMyCart(): Promise<Cart | null> {
               ...i,
               price: i.price.toString(),
             })) as CartItem[],
+            DEFAULT_PRICING_CONFIG
           );
 
           await tx.cart.update({
@@ -293,6 +308,7 @@ export const removeItemFromCart = async (
         ...i,
         price: i.price.toString(),
       })) as CartItem[],
+      DEFAULT_PRICING_CONFIG
     );
 
     await prisma.cart.update({

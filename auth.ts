@@ -5,12 +5,41 @@ import NextAuth, { NextAuthConfig } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { NextResponse } from 'next/server';
 
+// ----- Types -----
+
 type SafeUser = {
   id: string;
   name?: string | null;
   email?: string | null;
   role?: string | null;
 };
+
+// ----- Route Protection -----
+const PROTECTED_PATHS = [
+  /\/shipping-address/,
+  /\/payment-method/,
+  /\/place-order/,
+  /\/profile/,
+  /\/user\/(.*)/,
+  /\/order\/(.*)/,
+  /\/admin/,
+];
+
+const isProtectedPath = (pathname: string) =>
+  PROTECTED_PATHS.some((pattern) => pattern.test(pathname));
+
+// ----- Session Cart Helpers -----
+
+/**
+ * Builds a NextResponse that sets (or rotates) the sessionCartId cookie.
+ * Called both on first visit (no cookie yet) and after sign-out (stale cookie
+ * must be replaced so the previous user's cart cannot leak into the new session).
+ */
+function responseWithFreshCartId(): NextResponse {
+  const res = NextResponse.next();
+  res.cookies.set('sessionCartId', crypto.randomUUID());
+  return res;
+}
 
 export const config: NextAuthConfig = {
   debug: process.env.NODE_ENV !== 'production',
@@ -36,23 +65,22 @@ export const config: NextAuthConfig = {
           label: 'Password',
         },
       },
-      // authorize should return a user object (without sensitive fields) or null on failure.
-
+      /**
+       * Validate credentials against the database.
+       * Returns a SafeUser on success or null on failure.
+       */
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        // Find user in database
         const user = await prisma.user.findUnique({
           where: {
             email: credentials.email as string,
           },
         });
 
-        // Optionally, this is also the place you could do a user registration
-        if (!user || !user.password) throw new Error('Invalid Credentials');
+        if (!user?.password) throw new Error('Invalid Credentials');
 
         // Check if user exists and if the password matches
-
         const isMatch = await compare(
           credentials.password as string,
           user.password,
@@ -70,7 +98,11 @@ export const config: NextAuthConfig = {
     }),
   ],
   callbacks: {
-    // Token logic: Populate token fields from the user fields
+    /**
+     * JWT callback — runs when a token is created or updated.
+     * Populates token fields from the user object and handles display-name
+     * fallback logic for users who signed up without a name.
+     */
     async jwt({ token, user, trigger, session }: any) {
       if (user) {
         token.sub = user.id;
@@ -78,7 +110,7 @@ export const config: NextAuthConfig = {
         token.name =
           user.name ?? (user.email ? user.email.split('@')[0] : null);
 
-        // If user has no name, then use the email
+        // Persists an auto-generated display name back to the database
         if (user.name === 'NO_NAME') {
           token.name = user.email!.split('@')[0];
 
@@ -89,73 +121,53 @@ export const config: NextAuthConfig = {
           });
         }
 
-        // Propagate name updates triggered via session update
+        // Propagate name updates triggered via session.update()
         if (session?.user?.name && trigger === 'update') {
           token.name = session.user.name;
         }
       }
       return token;
     },
-    // map token --> session safely
+    /**
+     * Session callback — maps JWT token fields onto the session object
+     * that is exposed to the client.
+     */
     async session({ session, token }: any) {
-      session.user = session.user ?? {};
-      // The token should be available now, if populated by jwt callback
       if (!token) throw new Error('No token provided');
-      // token.sub is expected to hold user id
+
+      session.user = session.user ?? {};
       session.user.id = token.sub ?? session.user.id;
       session.user.role = token.role ?? session.user.role ?? null;
       session.user.name = token.name ?? session.user.name ?? null;
+
       return session;
     },
+    /**
+     * Authorized callback — runs on every request via middleware.
+     *
+     * Responsibilities:
+     *  1. Block unauthenticated access to protected routes.
+     *  2. Rotate the sessionCartId cookie when a user is not authenticated
+     *     but an old cookie is still present (prevents cart leaking between
+     *     users after sign-out).
+     *  3. Issue a fresh sessionCartId on first visit (no cookie yet).
+     */
     async authorized({ request, auth }): Promise<any> {
-      // Array of regex patterns of path we want to protect
-      const protectedPaths = [
-        /\/shipping-address/,
-        /\/payment-method/,
-        /\/place-order/,
-        /\/profile/,
-        /\/user\/(.*)/,
-        /\/order\/(.*)/,
-        /\/admin/,
-      ];
-
       // Get pathname from the req URL object
       const { pathname } = request.nextUrl;
+      const hasCartCookie = !!request.cookies.get('sessionCartId');
 
-      // Check if user is not authenticated and accessing a protected route
-      if (!auth && protectedPaths.some((path) => path.test(pathname)))
-        return false;
+      // 1. Block unauthenticated access to protected routes.
+      if (!auth && isProtectedPath(pathname)) return false;
 
-      // If no authenticated user but a sessionCartId cookie exists,
-      // clear it so a fresh one is issued - prevents cart leaking between users
-      if (!auth && request.cookies.get('sessionCartId')) {
-        const res = NextResponse.next();
-        res.cookies.delete('sessionCartId');
-        const sessionCartId = crypto.randomUUID();
-        res.cookies.set('sessionCartId', sessionCartId);
-        return res;
-      }
+      // 2. [REMOVED] Stale cart cookie logic. It was infinitely resetting Guest Carts!
+      // In the future, you should clear sessionCartId via your sign-out action, not here globally.
 
-      // If the request already has sessionCartId, continue.
-      if (request.cookies.get('sessionCartId')) return true;
+      // 3. Issue a cart cookie on first visit.
+      if (!hasCartCookie) return responseWithFreshCartId();
 
-      // Otherwise, Generate new sessionCartId and set it in the response cookie for subsequent requests.
-      const sessionCartId = crypto.randomUUID();
-
-      // Clone headers so downstream middleware/handlers receive the same headers
-      const newReqHeaders = new Headers(request.headers);
-
-      // Add new headers
-      const res = NextResponse.next({
-        request: {
-          headers: newReqHeaders,
-        },
-      });
-
-      // Set cookie, with new sessionCartId
-      res.cookies.set('sessionCartId', sessionCartId);
-
-      return res;
+      // Authenticated request with a valid cart cookie — nothing to do.
+      return true;
     },
   },
 };

@@ -24,10 +24,11 @@ interface Props {
 }
 
 const AdminOrdersPage = async ({ searchParams }: Props) => {
+  // 1. Check authentication and authorization
   await requireAdmin();
-
+  // 2. Await search params to get page and query
   const { page = 1, query = '' } = await searchParams;
-
+  // 3. Fetch orders using the page and query
   const { data, totalPages } = await getAllOrders({
     page: Number(page),
     query,

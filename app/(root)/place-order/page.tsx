@@ -1,4 +1,3 @@
-import { auth } from '@/auth';
 import CheckoutSteps from '@/components/shared/checkout-steps';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -18,22 +17,24 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import PlaceOrderForm from './place-order-form';
+import { getAuthenticatedUserId } from '@/lib/auth-utils';
 import { formatPaymentMethod } from '@/lib/constants';
+import PlaceOrderForm from './place-order-form';
 
 export const metadata: Metadata = {
   title: 'Place Order',
 };
 
-const PlaceOrderpage = async () => {
+const PlaceOrderPage = async () => {
+  // 1. Check authentication
+  const userId = await getAuthenticatedUserId();
+
+  // 2. Fetch cart
   const cart = await getMyCart();
-  const session = await auth();
-  const userId = session?.user?.id;
-
-  if (!userId) throw new Error('User not found');
-  const { address, paymentMethod } = await getUserById(userId);
-
   if (!cart || cart.items.length === 0) redirect('/cart');
+
+  // 3. Fetch user by ID
+  const { address, paymentMethod } = await getUserById(userId);
   if (!address) redirect('/shipping-address');
   if (!paymentMethod) redirect('/payment-method');
 
@@ -145,4 +146,4 @@ const PlaceOrderpage = async () => {
   );
 };
 
-export default PlaceOrderpage;
+export default PlaceOrderPage;

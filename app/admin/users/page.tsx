@@ -25,10 +25,11 @@ interface Props {
 }
 
 const AdminUserPage = async (props: Props) => {
+  // 1. Check authentication and authorization
   await requireAdmin();
-
+  // 2. Await search params to get page and query
   const { page = 1, query } = await props.searchParams;
-
+  // 3. Fetch users using the page and query
   const { data, totalPages } = await getAllUsers({ page: Number(page), query });
 
   return (

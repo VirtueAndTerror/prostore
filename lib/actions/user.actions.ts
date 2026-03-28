@@ -3,12 +3,13 @@
 import { auth, signIn, signOut } from '@/auth';
 import { prisma } from '@/db/prisma';
 import { Prisma } from '@/lib/generated/prisma';
-import { ShippingAddress } from '@/types';
+import type { ShippingAddress } from '@/types';
 import { hashSync } from 'bcrypt-ts-edge';
 import { revalidatePath } from 'next/cache';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { cookies } from 'next/headers';
 import { z } from 'zod';
+import { getAuthenticatedUserId } from '../auth-utils';
 import { PAGE_SIZE } from '../constants';
 import { formatError } from '../utils';
 import {
@@ -18,11 +19,11 @@ import {
   signUpFormSchema,
   updateUserSchema,
 } from '../validators';
-import { getMyCart } from './cart.actions';
-import { getAuthenticatedUserId } from '../auth-utils';
 
+// ----- Types -----
 type UserActionResult = { success: boolean; message: string };
 
+// ----- Helpers -----
 async function requireCurrentUser() {
   const session = await auth();
   const user = await prisma.user.findUnique({
@@ -32,36 +33,43 @@ async function requireCurrentUser() {
   return user;
 }
 
-// Sign in the user with credentials
+// ----- Auth Actions -----
 export async function signInWithCredentials(
   prevState: unknown,
   formData: FormData,
-) {
+): Promise<UserActionResult> {
   try {
-    const user = signInFormSchema.parse({
+    const credentials = signInFormSchema.parse({
       email: formData.get('email'),
       password: formData.get('password'),
     });
 
-    await signIn('credentials', user);
+    await signIn('credentials', credentials);
 
     return { success: true, message: 'Signed in successfully' };
   } catch (error: unknown) {
-    if (isRedirectError(error)) {
-      throw error;
-    }
+    if (isRedirectError(error)) throw error;
+
     return { success: false, message: 'Invalid email or password' };
   }
 }
 
-// Sign Out user
-export async function signOutUser() {
+/**
+ * Signs the current user out.
+ * Deletes all carts belonging to the user and clears the sessionCartId cookie
+ * before calling NextAuth's signOut so no cart data leaks to the next session.
+ *
+ * NOTE: The `authorized` callback in auth.ts also rotates the sessionCartId
+ * on the first unauthenticated request after sign-out, providing a second layer
+ * of protection against cart-leaking between users.
+ */
+export async function signOutUser(): Promise<void> {
   try {
     const userId = await getAuthenticatedUserId();
     const cookieStore = await cookies();
     const sessionCartId = cookieStore.get('sessionCartId')?.value;
-    // Delete All carts associated with this user OR this session
 
+    // Delete All carts associated with this user OR this session
     await prisma.cart.deleteMany({
       where: {
         OR: [{ userId }, ...(sessionCartId ? [{ sessionCartId }] : [])],
@@ -78,42 +86,45 @@ export async function signOutUser() {
   }
 }
 
-// Sign Up user
+/**
+ * Registers a new user, hashes their password, and immediately signs them in.
+ * Compatible with React's useFormState (accepts prevState + FormData).
+ */
 export async function signUpUser(
   prevState: unknown,
   formData: FormData,
 ): Promise<UserActionResult> {
   try {
-    const user = signUpFormSchema.parse({
+    const { name, email, password } = signUpFormSchema.parse({
       name: formData.get('name'),
       email: formData.get('email'),
       password: formData.get('password'),
       confirmPassword: formData.get('confirmPassword'),
     });
 
-    const { password: plainPassword, name, email } = user;
-
-    // Hash the password before saving to database
-    const hashedPassword = hashSync(user.password, 10);
-
     await prisma.user.create({
-      data: { name, email, password: hashedPassword },
+      data: { name, email, password: hashSync(password, 10) },
     });
 
-    await signIn('credentials', { email, password: plainPassword });
+    // Sign in immediately after registration so the user lands in an active session.
+    await signIn('credentials', { email, password });
 
     return { success: true, message: 'User registered successfully' };
   } catch (error: unknown) {
-    if (isRedirectError(error)) {
-      throw error;
-    }
+    if (isRedirectError(error)) throw error;
+
     console.error(error);
     return { success: false, message: formatError(error) };
   }
 }
 
-// Get user by ID (excludes password)
-export const getUserById = async (id: string) => {
+// ----- Read Actions -----
+
+/**
+ * Fetches a user by ID, excluding the password field.
+ * Throws if no user is found — callers should only pass valid IDs.
+ */
+export async function getUserById(id: string) {
   const user = await prisma.user.findUnique({
     where: { id },
     omit: { password: true },
@@ -124,12 +135,50 @@ export const getUserById = async (id: string) => {
   }
 
   return user;
-};
+}
 
-// Update user's address
-export const updateUserAddress = async (
+/** Returns a paginated, optionally filtered list of all users (admin use). */
+export async function getAllUsers({
+  query = '',
+  limit = PAGE_SIZE,
+  page,
+}: {
+  query: string;
+  limit?: number;
+  page: number;
+}) {
+  const where: Prisma.UserWhereInput =
+    query && query !== 'all'
+      ? {
+          name: {
+            contains: query,
+            mode: 'insensitive',
+          } as Prisma.StringFilter,
+        }
+      : {};
+
+  const [data, dataCount] = await prisma.$transaction([
+    prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: (page - 1) * limit,
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  return {
+    data,
+    totalPages: Math.ceil(dataCount / limit),
+  };
+}
+
+// ----- Write Actions -----
+
+/** Saves a new shipping address for the current user. */
+export async function updateUserAddress(
   data: ShippingAddress,
-): Promise<UserActionResult> => {
+): Promise<UserActionResult> {
   try {
     const currentUser = await requireCurrentUser();
     const address = shippingAddressSchema.parse(data);
@@ -143,12 +192,12 @@ export const updateUserAddress = async (
   } catch (error: unknown) {
     return { success: false, message: formatError(error) };
   }
-};
+}
 
-// Update user's payment method
-export const updateUserPaymentMethod = async (
+/** Saves a new payment method selection for the current user. */
+export async function updateUserPaymentMethod(
   data: z.infer<typeof paymentMethodSchema>,
-): Promise<UserActionResult> => {
+): Promise<UserActionResult> {
   try {
     const currentUser = await requireCurrentUser();
     const paymentMethod = paymentMethodSchema.parse(data);
@@ -162,78 +211,30 @@ export const updateUserPaymentMethod = async (
   } catch (error: unknown) {
     return { success: false, message: formatError(error) };
   }
-};
+}
 
-export const updateProfile = async (user: {
+/** Updates the current user's public display name. */
+export async function updateProfile(user: {
   name: string;
   email: string;
-}): Promise<UserActionResult> => {
+}): Promise<UserActionResult> {
   try {
     const currentUser = await requireCurrentUser();
-
     await prisma.user.update({
       where: { id: currentUser.id },
       data: { name: user.name },
     });
-
     return { success: true, message: 'User updated successfully' };
   } catch (error: unknown) {
     console.error(error);
     return { success: false, message: formatError(error) };
   }
-};
+}
 
-// Get All Users
-export const getAllUsers = async ({
-  query = '',
-  limit = PAGE_SIZE,
-  page,
-}: {
-  query: string;
-  limit?: number;
-  page: number;
-}) => {
-  const queryFilter: Prisma.UserWhereInput =
-    query && query !== 'all'
-      ? {
-          name: {
-            contains: query,
-            mode: 'insensitive',
-          } as Prisma.StringFilter,
-        }
-      : {};
-
-  const data = await prisma.user.findMany({
-    where: { ...queryFilter },
-    orderBy: { createdAt: 'desc' },
-    take: limit,
-    skip: (page - 1) * limit,
-  });
-
-  const dataCount = await prisma.user.count({ where: { ...queryFilter } });
-  const totalPages = Math.ceil(dataCount / limit);
-
-  return {
-    data,
-    totalPages,
-  };
-};
-
-// Delete
-export const deleteUser = async (userId: string): Promise<UserActionResult> => {
-  try {
-    await prisma.user.delete({ where: { id: userId } });
-    revalidatePath('/admin/users');
-    return { success: true, message: 'User deleted successfully' };
-  } catch (error: unknown) {
-    return { success: false, message: formatError(error) };
-  }
-};
-
-// Update
-export const updateUser = async (
+/** Updates a user's name and role (admin use). */
+export async function updateUser(
   user: z.infer<typeof updateUserSchema>,
-): Promise<UserActionResult> => {
+): Promise<UserActionResult> {
   try {
     const { id, name, role } = user;
 
@@ -247,4 +248,15 @@ export const updateUser = async (
   } catch (error: unknown) {
     return { success: false, message: formatError(error) };
   }
-};
+}
+
+/** Permanently deletes a user account (admin use). */
+export async function deleteUser(userId: string): Promise<UserActionResult> {
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+    revalidatePath('/admin/users');
+    return { success: true, message: 'User deleted successfully' };
+  } catch (error: unknown) {
+    return { success: false, message: formatError(error) };
+  }
+}

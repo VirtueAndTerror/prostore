@@ -17,13 +17,16 @@ interface Props {
 }
 
 const OrderDetailsPage = async (props: Props) => {
+  // 1. Check authentication
+  const session = await auth();
+  // 2. Await params to get order ID
   const { id } = await props.params;
-
+  // 3. Fetch order by ID
   const order = await getOrderById(id);
   if (!order) return notFound();
+
   const { id: orderId, paymentMethod, isPaid, totalPrice } = order;
 
-  const session = await auth();
 
   let client_secret = null;
 

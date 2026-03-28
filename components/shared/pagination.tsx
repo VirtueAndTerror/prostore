@@ -11,7 +11,7 @@ interface Props {
 
 const Pagination = ({ page, totalPages, urlParamName }: Props) => {
   const router = useRouter();
-  const searchParams = useSearchParams().toString;
+  const searchParams = useSearchParams();
 
   const handleClick = (btnType: string) => {
     const value = (

@@ -58,16 +58,6 @@ export function formatError(error: unknown): string {
     : 'An unexpected error has occurred. Please try again later';
 }
 
-export function round2Decimals(num: number | string) {
-  if (typeof num === 'number') {
-    return Math.round((num + Number.EPSILON) * 100) / 100;
-  } else if (typeof num === 'string') {
-    return Math.round(Number(num + Number.EPSILON * 100) / 100);
-  } else {
-    throw new Error('Invalid number or string');
-  }
-}
-
 const currencyFormatter = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',

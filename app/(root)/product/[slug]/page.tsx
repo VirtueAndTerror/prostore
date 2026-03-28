@@ -2,28 +2,32 @@ import { auth } from '@/auth';
 import AddToCart from '@/components/shared/product/add-to-cart';
 import ProductImages from '@/components/shared/product/product-images';
 import ProductPrice from '@/components/shared/product/product-price';
+import Rating from '@/components/shared/product/rating';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { getMyCart, getProductBySlug } from '@/lib/actions';
 import { notFound } from 'next/navigation';
 import ReviewList from './review-list';
-import Rating from '@/components/shared/product/rating';
 
 interface Props {
   params: Promise<{ slug: string }>;
 }
 
 const ProductDetailsPage = async ({ params }: Props) => {
+  // 1. Get slug from params
   const { slug } = await params;
 
-  const [product, cart] = await Promise.all([
+  // 2. Fetch product, cart, and session in parallel
+  const [product, cart, session] = await Promise.all([
     getProductBySlug(slug),
     getMyCart(),
+    auth(),
   ]);
 
+  // 3. Handle not found product
   if (!product) return notFound();
 
-  const session = await auth();
+  // 4. Get user ID from session (will be undefined if not logged in)
   const userId = session?.user?.id;
 
   const {
@@ -108,7 +112,7 @@ const ProductDetailsPage = async ({ params }: Props) => {
         </div>
       </section>
       <section className='mt-10'>
-        <ReviewList userId={userId || ''} productId={id} slug={slug} />
+        <ReviewList userId={userId ?? ''} productId={id} slug={slug} />
       </section>
     </>
   );

@@ -12,43 +12,54 @@ import {
 import { convertToPlainObject, formatError, isActive } from '../utils';
 import { insertProductSchema, updateProductSchema } from '../validators';
 
+// ----- Types -----
 type ProductActionResult = { success: boolean; message: string };
 
+// ----- Constatns -----
+/** Maps sort query-param values to Prisma orderBy objects. */
 const SORT_ORDER_MAP = {
   lowest: { price: 'asc' as const },
   highest: { price: 'desc' as const },
   rating: { rating: 'desc' as const },
 } as const;
 
-// Get latest Products
-export const getLatestProducts = async () => {
+// ----- Read Actions -----
+/** Returns the most recently created products up to LATEST_PRODUCTS_LIMIT. */
+export async function getLatestProducts() {
   const data = await prisma.product.findMany({
     take: LATEST_PRODUCTS_LIMIT,
     orderBy: { createdAt: 'desc' },
   });
 
   return convertToPlainObject(data);
-};
+}
 
-// Get Single Product By slug
-export const getProductBySlug = async (
-  slug: string,
-): Promise<Product | null> => {
+/** Returns a single product by its URL slug, or null if not found. */
+export async function getProductBySlug(slug: string): Promise<Product | null> {
   const data = await prisma.product.findFirst({ where: { slug } });
   return data ? convertToPlainObject(data) : null;
-};
+}
 
-// Get Single Product By ID
-export const getProductById = async (
+/** Returns a single product by its ID, or null if not found. */
+export async function getProductById(
   productId: string,
-): Promise<Product | null> => {
+): Promise<Product | null> {
   const data = await prisma.product.findUnique({ where: { id: productId } });
 
   return convertToPlainObject(data);
-};
+}
 
-// Get All Products
-export const getAllProducts = async ({
+/**
+ * Returns a paginated, filtered, and sorted list of products.
+ *
+ * Filter parameters:
+ *  - query    : partial name match (case-insensitive)
+ *  - category : exact category match
+ *  - price    : "min-max" range string, e.g. "10-50"
+ *  - rating   : minimum rating threshold
+ *  - sort     : one of "lowest" | "highest" | "rating" (defaults to newest first)
+ */
+export async function getAllProducts({
   query,
   limit = PAGE_SIZE,
   page,
@@ -64,15 +75,17 @@ export const getAllProducts = async ({
   price?: string;
   rating?: string;
   sort?: string;
-}) => {
+}) {
+  // Build each filter clause independently so they compose cleanly.
+
   // Query filter
   const queryFilter: Prisma.ProductWhereInput = isActive(query)
     ? {
-      name: {
-        contains: query,
-        mode: 'insensitive',
-      } as Prisma.StringFilter,
-    }
+        name: {
+          contains: query,
+          mode: 'insensitive',
+        } as Prisma.StringFilter,
+      }
     : {};
 
   // Category filter
@@ -80,20 +93,22 @@ export const getAllProducts = async ({
     ? { category }
     : {};
 
-  // Price filter (expects "min-max" format e.g. "1-50")
+  // Price filter (expects "min-max" format e.g. "1-50"): ignore if malformed.
   const priceFilter: Prisma.ProductWhereInput = (() => {
     if (!price || !isActive(price)) return {};
-    const [minStr, maxStr] = price.split('-');
-    const min = Number(minStr);
-    const max = Number(maxStr);
-    if (Number.isNaN(min) || Number.isNaN(max)) return {};
-    return { price: { gte: min, lte: max } };
+    const [min, max] = price.split('-').map(Number);
+
+    return Number.isNaN(min) || Number.isNaN(max)
+      ? {}
+      : { price: { gte: min, lte: max } };
   })();
 
   // Rating filter
-  const ratingFilter = isActive(rating)
-    ? { rating: { gte: Number(rating) } }
-    : {};
+  const ratingFilter: Prisma.ProductWhereInput = (() => {
+    if (!rating || !isActive(rating)) return {};
+    const numRating = Number(rating);
+    return Number.isNaN(numRating) ? {} : { rating: { gte: numRating } };
+  })();
 
   const where = {
     ...queryFilter,
@@ -121,25 +136,35 @@ export const getAllProducts = async ({
     data: convertToPlainObject(data),
     totalPages: Math.ceil(dataCount / limit),
   };
-};
+}
 
-// Delete product
-export const deleteProduct = async (
-  productId: string,
-): Promise<ProductActionResult> => {
-  try {
-    await prisma.product.delete({ where: { id: productId } });
-    revalidatePath('/admin/products');
-    return { success: true, message: 'Product deleted successfully' };
-  } catch (error: unknown) {
-    return { success: false, message: formatError(error) };
-  }
-};
+/** Returns all distinct product categories with their product counts. */
+export async function getAllCategories() {
+  const data = await prisma.product.groupBy({
+    by: ['category'],
+    _count: true,
+  });
 
-// Create a product
-export const createProduct = async (
+  return data;
+}
+
+/** Returns featured products ordered by newest first, up to FEATURED_PRODUCTS_LIMIT. */
+export async function getFeaturedProducts() {
+  const data = await prisma.product.findMany({
+    where: { isFeatured: true },
+    orderBy: { createdAt: 'desc' },
+    take: FEATURED_PRODUCTS_LIMIT,
+  });
+
+  return convertToPlainObject(data);
+}
+
+// ----- Write Actions -----
+
+/** Creates a new product after validating the payload against insertProductSchema. */
+export async function createProduct(
   data: z.infer<typeof insertProductSchema>,
-): Promise<ProductActionResult> => {
+): Promise<ProductActionResult> {
   try {
     const product = insertProductSchema.parse(data);
     await prisma.product.create({ data: product });
@@ -148,15 +173,14 @@ export const createProduct = async (
   } catch (error: unknown) {
     return { success: false, message: formatError(error) };
   }
-};
+}
 
-// Update a product
-export const updateProduct = async (
+/** Updates an existing product after validating the payload against updateProductSchema. */
+export async function updateProduct(
   data: z.infer<typeof updateProductSchema>,
-): Promise<ProductActionResult> => {
+): Promise<ProductActionResult> {
   try {
-    const product = updateProductSchema.parse(data);
-    const { id, ...updateData } = product;
+    const { id, ...updateData } = updateProductSchema.parse(data);
 
     await prisma.product.update({
       where: { id },
@@ -167,25 +191,17 @@ export const updateProduct = async (
   } catch (error: unknown) {
     return { success: false, message: formatError(error) };
   }
-};
+}
 
-// Get All Categories
-export const getAllCategories = async () => {
-  const data = await prisma.product.groupBy({
-    by: ['category'],
-    _count: true,
-  });
-
-  return data;
-};
-
-// Get Featured Products
-export const getFeaturedProducts = async () => {
-  const data = await prisma.product.findMany({
-    where: { isFeatured: true },
-    orderBy: { createdAt: 'desc' },
-    take: FEATURED_PRODUCTS_LIMIT,
-  });
-
-  return convertToPlainObject(data);
-};
+/** Permanently deletes a product by ID. */
+export async function deleteProduct(
+  productId: string,
+): Promise<ProductActionResult> {
+  try {
+    await prisma.product.delete({ where: { id: productId } });
+    revalidatePath('/admin/products');
+    return { success: true, message: 'Product deleted successfully' };
+  } catch (error: unknown) {
+    return { success: false, message: formatError(error) };
+  }
+}

@@ -63,6 +63,17 @@ export const REVIEW_DEFAULT_VALUES = {
   rating: 0,
 };
 
+// Pricing Config
+export const FREE_SHIPPING_THRESHOLD_CENTS = Number(process.env.FREE_SHIPPING_THRESHOLD) || 10000;
+export const SHIPPING_FLAT_RATE_CENTS = Number(process.env.SHIPPING_FLAT_RATE) || 1000;
+export const TAX_RATE_BASE = Number(process.env.TAX_RATE) || 0.15;
+
+export const DEFAULT_PRICING_CONFIG = {
+  freeShippingThresholdCents: FREE_SHIPPING_THRESHOLD_CENTS,
+  shippingFlatRateCents: SHIPPING_FLAT_RATE_CENTS,
+  taxRateBase: TAX_RATE_BASE,
+};
+
 // Payments Config
 export const PAYMENT_METHODS = process.env.PAYMENT_METHODS
   ? process.env.PAYMENT_METHODS.split(', ')

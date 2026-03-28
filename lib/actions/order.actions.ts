@@ -19,6 +19,8 @@ import { insertOrderSchema } from '../validators';
 import { getMyCart } from './cart.actions';
 import { getUserById } from './user.actions';
 
+// ----- Types -----
+
 type OrderActionResult = {
   success: boolean;
   message: string;
@@ -29,15 +31,88 @@ type PayPalOrderActionResult = OrderActionResult & {
   orderId?: string;
 };
 
-// Main function - Create order and create order items
-export const createOrder = async (): Promise<OrderActionResult> => {
+// ----- Helpers -----
+/**
+ * Marks an order as paid, decrements product stock for every order item,
+ * and sends a purchase-receipt email to the buyer.
+ * Exposed separately so it can be called by both PayPal and COD flows.
+ */
+
+export async function updateOrderToPaid({
+  orderId,
+  paymentResult,
+}: {
+  orderId: string;
+  paymentResult?: PaymentResult;
+}): Promise<void> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { orderItems: true },
+  });
+
+  if (!order) throw new Error('Order not found');
+  if (order.isPaid) throw new Error('Order is already paid');
+
+  await prisma.$transaction(async (tx) => {
+    for (const item of order.orderItems) {
+      const product = await tx.product.findUnique({
+        where: { id: item.productId },
+        select: { stock: true, name: true },
+      });
+
+      if (!product) throw new Error('Product not found for order item');
+
+      if (product.stock < item.qty) {
+        throw new Error(
+          `Insufficient stock for "${product.name}". Available: ${product.stock}, requested: ${item.qty}`,
+        );
+      }
+
+      // Decrement stock by the ordered quantity.
+      await tx.product.update({
+        where: { id: item.productId },
+        data: { stock: { increment: -item.qty } },
+      });
+    }
+
+    // Mark the order paid.
+    await tx.order.update({
+      where: { id: order.id },
+      data: { isPaid: true, paidAt: new Date(), paymentResult },
+    });
+  });
+
+  // Re-fetch with relations needed for the receipt email.
+  const updatedOrder = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      orderItems: true,
+      user: { select: { name: true, email: true } },
+    },
+  });
+
+  if (!updatedOrder) throw new Error('Failed to retrieve updated order');
+
+  sendPurchaseReciept({
+    ...updatedOrder,
+    shippingAddress: updatedOrder.shippingAddress as ShippingAddress,
+    paymentResult: updatedOrder.paymentResult as PaymentResult,
+  });
+}
+
+// ----- Actions -----
+
+/**
+ * Creates an order from the current user's cart.
+ * Validates that a shipping address and payment method are set before proceeding.
+ * Clears the cart on success and redirects to the new order page.
+ */
+export async function createOrder(): Promise<OrderActionResult> {
   try {
     const userId = await getAuthenticatedUserId();
-
-    // Get cart and user data
     const [cart, user] = await Promise.all([getMyCart(), getUserById(userId)]);
 
-    // Validate order pre-requisites
+    // Guard: cart must be non-empty.
     if (!cart || cart.items.length === 0) {
       return {
         success: false,
@@ -45,7 +120,7 @@ export const createOrder = async (): Promise<OrderActionResult> => {
         redirectTo: '/cart',
       };
     }
-
+    // Guard: shipping address must be set.
     if (!user.address) {
       return {
         success: false,
@@ -53,7 +128,7 @@ export const createOrder = async (): Promise<OrderActionResult> => {
         redirectTo: '/shipping-address',
       };
     }
-
+    // Guard: payment method must be set.
     if (!user.paymentMethod) {
       return {
         success: false,
@@ -62,24 +137,18 @@ export const createOrder = async (): Promise<OrderActionResult> => {
       };
     }
 
-    // Create the order object
-    const { itemsPrice, shippingPrice, taxPrice, totalPrice } = cart;
-    const { id, address: shippingAddress, paymentMethod } = user;
-
     const order = insertOrderSchema.parse({
-      userId: id,
-      shippingAddress,
-      paymentMethod,
-      itemsPrice,
-      shippingPrice,
-      taxPrice,
-      totalPrice,
+      userId: user.id,
+      shippingAddress: user.address,
+      paymentMethod: user.paymentMethod,
+      itemsPrice: cart.itemsPrice,
+      shippingPrice: cart.shippingPrice,
+      taxPrice: cart.taxPrice,
+      totalPrice: cart.totalPrice,
     });
 
-    // Create a transaction to create order and order items in database
-
+    // Create the order, its items, and clear the cart atomically.
     const insertedOrderId = await prisma.$transaction(async (tx) => {
-      // Create order
       const insertedOrder = await tx.order.create({ data: order });
 
       // Create order items from cart items
@@ -92,7 +161,7 @@ export const createOrder = async (): Promise<OrderActionResult> => {
         });
       }
 
-      // Clear cart items and reset totals
+      // Empty the cart without deleting the record itself
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
       await tx.cart.update({
         where: { id: cart.id },
@@ -123,10 +192,10 @@ export const createOrder = async (): Promise<OrderActionResult> => {
       message: formatError(error),
     };
   }
-};
+}
 
-// Get order by ID
-export const getOrderById = async (orderId: string) => {
+/** Fetches a single order by ID, including its items and the buyer's public info. */
+export async function getOrderById(orderId: string) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
@@ -136,25 +205,25 @@ export const getOrderById = async (orderId: string) => {
   });
 
   return order ? convertToPlainObject(order) : null;
-};
+}
 
-// Create PayPal order
-export const createPayPalOrder = async (
+/**
+ * Creates a PayPal order for an existing app order.
+ * Stores the PayPal order ID in the paymentResult field for later capture.
+ */
+export async function createPayPalOrder(
   orderId: string,
-): Promise<PayPalOrderActionResult> => {
+): Promise<PayPalOrderActionResult> {
   try {
     // Get order form DB
     const order = await prisma.order.findUnique({
       where: { id: orderId },
     });
 
-    if (!order) {
-      throw new Error('Order not found - cannot create PayPal order');
-    }
+    if (!order) throw new Error('Order not found - cannot create PayPal order');
 
-    if (order.paymentMethod !== 'PAYPAL') {
+    if (order.paymentMethod !== 'PAYPAL')
       throw new Error('Payment method is not PayPal for this order');
-    }
 
     const paypalOrder = await paypal.createOrder(Number(order.totalPrice));
 
@@ -182,36 +251,34 @@ export const createPayPalOrder = async (
       message: formatError(error),
     };
   }
-};
+}
 
 // Approve PaypPal order - Update order payment result and mark as paid
-export const approvePayPalOrder = async (
+export async function approvePayPalOrder(
   orderId: string,
   data: { orderID: string },
-): Promise<OrderActionResult> => {
+): Promise<OrderActionResult> {
   try {
     const order = await prisma.order.findUnique({
       where: { id: orderId },
     });
 
-    if (!order) {
-      throw new Error('Order not found');
-    }
+    if (!order) throw new Error('Order not found');
 
-    if (order.paymentMethod !== 'PAYPAL') {
+    if (order.paymentMethod !== 'PAYPAL')
       throw new Error('Payment method is not PayPal for this order');
-    }
 
     const captureData = await paypal.capturePayment(data.orderID);
+    const storedId = (order.paymentResult as PaymentResult)?.id;
+
     if (
       !captureData ||
       captureData.status !== 'COMPLETED' ||
-      captureData.id !== (order.paymentResult as PaymentResult)?.id
+      captureData.id !== storedId
     ) {
       throw new Error('Payment capture failed or does not match order');
     }
 
-    // Update order to paid
     await updateOrderToPaid({
       orderId,
       paymentResult: {
@@ -236,88 +303,16 @@ export const approvePayPalOrder = async (
       message: formatError(error),
     };
   }
-};
+}
 
-export const updateOrderToPaid = async ({
-  orderId,
-  paymentResult,
-}: {
-  orderId: string;
-  paymentResult?: PaymentResult;
-}): Promise<void> => {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { orderItems: true },
-  });
-
-  if (!order) throw new Error('The order with the given ID not found');
-  if (order.isPaid) throw new Error('The order is already paid');
-
-  // Transaction to update order and product stock
-  await prisma.$transaction(async (tx) => {
-    // Iterate over products and update stock
-    for (const item of order.orderItems) {
-      const product = await tx.product.findUnique({
-        where: { id: item.productId },
-        select: { stock: true, name: true },
-      });
-
-      if (!product) {
-        throw new Error('Product not found for order item');
-      }
-
-      if (product.stock < item.qty) {
-        throw new Error(
-          `Insufficient stock for product "${product.name}". Available: ${product.stock}, requested: ${item.qty}`,
-        );
-      }
-
-      await tx.product.update({
-        where: {
-          id: item.productId,
-        },
-        data: { stock: { increment: -item.qty } },
-      });
-    }
-
-    // Set the order to paid
-    await tx.order.update({
-      where: { id: orderId },
-      data: {
-        isPaid: true,
-        paidAt: new Date(),
-        paymentResult,
-      },
-    });
-  });
-
-  // Get updated order after transaction
-  const updatedOrder = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: {
-      orderItems: true,
-      user: { select: { name: true, email: true } },
-    },
-  });
-
-  if (!updatedOrder) throw new Error('Failed to retrieve updated order');
-
-  // Send Email Receipt to the user
-  sendPurchaseReciept({
-    ...updatedOrder,
-    shippingAddress: updatedOrder.shippingAddress as ShippingAddress,
-    paymentResult: updatedOrder.paymentResult as PaymentResult,
-  });
-};
-
-// Get user's orders
-export const getMyOrders = async ({
+/** Returns a paginated list of orders for the currently authenticated user. */
+export async function getMyOrders({
   limit = PAGE_SIZE,
   page,
 }: {
   limit?: number;
   page: number;
-}) => {
+}) {
   const userId = await getAuthenticatedUserId();
 
   const data = await prisma.order.findMany({
@@ -333,38 +328,50 @@ export const getMyOrders = async ({
     data: convertToPlainObject(data),
     totalPages: Math.ceil(dataCount / limit),
   };
-};
+}
 
-// Get sales data and order summary
-export const getOrderSummary = async () => {
+/**
+ * Returns aggregated dashboard data: entity counts, total revenue, monthly sales
+ * breakdown, and the six most recent paid orders.
+ */
+export async function getOrderSummary() {
   // Get counts for each resource
-  const ordersCount = await prisma.order.count();
-  const productsCount = await prisma.product.count();
-  const usersCount = await prisma.user.count();
+  const [
+    ordersCount,
+    productsCount,
+    usersCount,
+    totalSales,
+    salesRawData,
+    latestSales,
+  ] = await Promise.all([
+    prisma.order.count(),
+    prisma.product.count(),
+    prisma.user.count(),
 
-  // Calculate total sales
-  const totalSales = await prisma.order.aggregate({
-    _sum: { totalPrice: true },
-    where: { isPaid: true },
-  });
+    // Calculate total sales
+    prisma.order.aggregate({
+      _sum: { totalPrice: true },
+      where: { isPaid: true },
+    }),
 
-  // Get monthly sales
-  const salesRawData = await prisma.$queryRaw<
-    Array<{ month: string; totalSales: Prisma.Decimal }>
-  >`SELECT to_char("createdAt", 'MM/YY') as "month", sum("totalPrice") as "totalSales" FROM "Order" GROUP BY to_char("createdAt", 'MM/YY') ORDER BY MIN("createdAt")`;
+    // Get monthly sales
+    prisma.$queryRaw<
+      Array<{ month: string; totalSales: Prisma.Decimal }>
+    >`SELECT to_char("createdAt", 'MM/YY') as "month", sum("totalPrice") as "totalSales" FROM "Order" GROUP BY to_char("createdAt", 'MM/YY') ORDER BY MIN("createdAt")`,
+
+    prisma.order.findMany({
+      orderBy: { createdAt: 'desc' },
+      where: { isPaid: true },
+      include: { user: { select: { name: true } } },
+      take: 6,
+    }),
+  ]);
 
   // Get latest sales
   const salesData: SalesData = salesRawData.map((entry) => ({
     month: entry.month,
     totalSales: Number(entry.totalSales),
   }));
-
-  const latestSales = await prisma.order.findMany({
-    orderBy: { createdAt: 'desc' },
-    where: { isPaid: true },
-    include: { user: { select: { name: true } } },
-    take: 6,
-  });
 
   return {
     ordersCount,
@@ -374,10 +381,10 @@ export const getOrderSummary = async () => {
     latestSales,
     salesData,
   };
-};
+}
 
-// Get all orders
-export const getAllOrders = async ({
+/** Returns a paginated, optionally filtered list of all orders (admin use). */
+export async function getAllOrders({
   query = '',
   limit = PAGE_SIZE,
   page,
@@ -385,8 +392,8 @@ export const getAllOrders = async ({
   query: string;
   limit?: number;
   page: number;
-}) => {
-  const queryFilter: Prisma.OrderWhereInput = isActive(query)
+}) {
+  const where: Prisma.OrderWhereInput = isActive(query)
     ? {
         user: {
           name: {
@@ -397,28 +404,25 @@ export const getAllOrders = async ({
       }
     : {};
 
-  const where = { ...queryFilter };
-
-  const data = await prisma.order.findMany({
-    where,
-    orderBy: { createdAt: 'desc' },
-    take: limit,
-    skip: (page - 1) * limit,
-    include: { user: { select: { name: true } } },
-  });
-
-  const dataCount = await prisma.order.count({ where });
+  const [data, dataCount] = await prisma.$transaction([
+    prisma.order.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      skip: (page - 1) * limit,
+      include: { user: { select: { name: true } } },
+    }),
+    prisma.order.count({ where }),
+  ]);
 
   return {
     data: convertToPlainObject(data),
     totalPages: Math.ceil(dataCount / limit),
   };
-};
+}
 
-// Delete an order
-export const deleteOrder = async (
-  orderId: string,
-): Promise<OrderActionResult> => {
+/** Permanently deletes an order record (admin use). */
+export async function deleteOrder(orderId: string): Promise<OrderActionResult> {
   try {
     await prisma.order.delete({ where: { id: orderId } });
     revalidatePath('/admin/orders');
@@ -433,12 +437,12 @@ export const deleteOrder = async (
       message: formatError(error),
     };
   }
-};
+}
 
-// Update COD to paid
-export const updateCODToPaid = async (
+/** Marks a Cash-on-Delivery order as paid (admin use). */
+export async function updateCODToPaid(
   orderId: string,
-): Promise<OrderActionResult> => {
+): Promise<OrderActionResult> {
   try {
     await updateOrderToPaid({ orderId });
     revalidatePath(`/order/${orderId}`);
@@ -453,12 +457,12 @@ export const updateCODToPaid = async (
       message: formatError(error),
     };
   }
-};
+}
 
-// Update COD order to delivered
-export const deliverOrder = async (
+/** Marks a paid order as delivered (admin use). */
+export async function deliverOrder(
   orderId: string,
-): Promise<OrderActionResult> => {
+): Promise<OrderActionResult> {
   try {
     const order = await prisma.order.findUnique({ where: { id: orderId } });
 
@@ -482,4 +486,4 @@ export const deliverOrder = async (
       message: formatError(error),
     };
   }
-};
+}

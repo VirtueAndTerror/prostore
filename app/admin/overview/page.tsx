@@ -21,8 +21,9 @@ export const metadata: Metadata = {
 };
 
 const AdminOverviewPage = async () => {
+  // 1. Check authentication and authorization
   await requireAdmin();
-
+  // 2. Fetch order summary
   const {
     totalSales,
     ordersCount,
