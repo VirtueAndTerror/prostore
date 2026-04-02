@@ -33,22 +33,32 @@ async function requireCurrentUser() {
   return user;
 }
 
+import { mergeGuestCartIntoUserCart } from './cart.actions';
+
 // ----- Auth Actions -----
 export async function signInWithCredentials(
   prevState: unknown,
   formData: FormData,
 ): Promise<UserActionResult> {
+  let userEmail = '';
   try {
     const credentials = signInFormSchema.parse({
       email: formData.get('email'),
       password: formData.get('password'),
     });
+    userEmail = credentials.email;
 
     await signIn('credentials', credentials);
 
     return { success: true, message: 'Signed in successfully' };
   } catch (error: unknown) {
-    if (isRedirectError(error)) throw error;
+    if (isRedirectError(error)) {
+      if (userEmail) {
+        const user = await prisma.user.findUnique({ where: { email: userEmail } });
+        if (user) await mergeGuestCartIntoUserCart(user.id);
+      }
+      throw error;
+    }
 
     return { success: false, message: 'Invalid email or password' };
   }
@@ -76,8 +86,13 @@ export async function signOutUser(): Promise<void> {
       },
     });
 
+    // Explicitly delete the session cart cookie so the next user gets a fresh one
     cookieStore.delete('sessionCartId');
+
+    // Signal to middleware that a sign-out just occurred
+    cookieStore.set('signed-out', '1', { maxAge: 5, httpOnly: true });
     await signOut();
+
   } catch (error: unknown) {
     if (isRedirectError(error)) {
       throw error;
@@ -94,6 +109,7 @@ export async function signUpUser(
   prevState: unknown,
   formData: FormData,
 ): Promise<UserActionResult> {
+  let createdUserId = '';
   try {
     const { name, email, password } = signUpFormSchema.parse({
       name: formData.get('name'),
@@ -102,16 +118,20 @@ export async function signUpUser(
       confirmPassword: formData.get('confirmPassword'),
     });
 
-    await prisma.user.create({
+    const user = await prisma.user.create({
       data: { name, email, password: hashSync(password, 10) },
     });
+    createdUserId = user.id;
 
     // Sign in immediately after registration so the user lands in an active session.
     await signIn('credentials', { email, password });
 
     return { success: true, message: 'User registered successfully' };
   } catch (error: unknown) {
-    if (isRedirectError(error)) throw error;
+    if (isRedirectError(error)) {
+      if (createdUserId) await mergeGuestCartIntoUserCart(createdUserId);
+      throw error;
+    }
 
     console.error(error);
     return { success: false, message: formatError(error) };
@@ -150,11 +170,11 @@ export async function getAllUsers({
   const where: Prisma.UserWhereInput =
     query && query !== 'all'
       ? {
-          name: {
-            contains: query,
-            mode: 'insensitive',
-          } as Prisma.StringFilter,
-        }
+        name: {
+          contains: query,
+          mode: 'insensitive',
+        } as Prisma.StringFilter,
+      }
       : {};
 
   const [data, dataCount] = await prisma.$transaction([

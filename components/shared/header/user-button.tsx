@@ -1,4 +1,5 @@
 import { auth } from '@/auth';
+import SignOutButton from '@/components/shared/header/sign-out-button';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -7,7 +8,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import SignOutButton from '@/components/shared/header/sign-out-button';
 import { UserIcon } from 'lucide-react';
 import Link from 'next/link';
 

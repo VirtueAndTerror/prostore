@@ -1,7 +1,3 @@
-import { Metadata } from 'next';
-import { getMyOrders } from '@/lib/actions';
-import { formatCurrency, formatDateTime, formatId } from '@/lib';
-import Link from 'next/link';
 import {
   Table,
   TableBody,
@@ -10,6 +6,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { formatCurrency, formatDateTime, formatId } from '@/lib';
+import { getMyOrders } from '@/lib/actions';
+import { Metadata } from 'next';
+import Link from 'next/link';
 
 import Pagination from '@/components/shared/pagination';
 

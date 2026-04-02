@@ -156,12 +156,17 @@ export const config: NextAuthConfig = {
       // Get pathname from the req URL object
       const { pathname } = request.nextUrl;
       const hasCartCookie = !!request.cookies.get('sessionCartId');
+      const justSignedOut = !!request.cookies.get('signed-out');
 
       // 1. Block unauthenticated access to protected routes.
       if (!auth && isProtectedPath(pathname)) return false;
 
-      // 2. [REMOVED] Stale cart cookie logic. It was infinitely resetting Guest Carts!
-      // In the future, you should clear sessionCartId via your sign-out action, not here globally.
+      // 2. If user just signed out, rotate the sessionCartId cookie.
+      if (!auth && justSignedOut) {
+        // Clear the signed-out flag
+        request.cookies.delete('signed-out');
+        return responseWithFreshCartId();
+      }
 
       // 3. Issue a cart cookie on first visit.
       if (!hasCartCookie) return responseWithFreshCartId();

@@ -15,24 +15,26 @@ import {
 import { formatCurrency, formatDateTime, formatId } from '@/lib';
 import type { Order } from '@/types';
 import {
-  PayPalProvider,
   PayPalOneTimePaymentButton,
+  PayPalProvider,
 } from '@paypal/react-paypal-js/sdk-v6';
 
 import Image from 'next/image';
 import Link from 'next/link';
 
 import {
-  approvePayPalOrder,
-  createPayPalOrder,
   deliverOrder,
   updateCODToPaid,
 } from '@/lib/actions';
+import {
+  approvePayPalOrder,
+  createPayPalOrder,
+} from '@/lib/actions/paypal.actions';
 
 import { useToast } from '@/hooks/use-toast';
+import { formatPaymentMethod } from '@/lib/constants';
 import { useTransition } from 'react';
 import StripePayment from './stripe-payment';
-import { formatPaymentMethod } from '@/lib/constants';
 
 interface Props {
   order: Order;

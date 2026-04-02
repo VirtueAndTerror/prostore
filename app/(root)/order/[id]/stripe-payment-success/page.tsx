@@ -3,8 +3,9 @@ import { getOrderById } from '@/lib/actions';
 import { notFound, redirect } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { serverEnv } from '@/lib/server-env';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+const stripe = new Stripe(serverEnv.STRIPE_SECRET_KEY);
 
 interface Props {
   params: Promise<{ id: string }>;

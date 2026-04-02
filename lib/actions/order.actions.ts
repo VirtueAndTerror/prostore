@@ -13,9 +13,8 @@ import { revalidatePath } from 'next/cache';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
 import { PAGE_SIZE } from '../constants';
 import { Prisma } from '../generated/prisma';
-import { paypal } from '../paypal';
 import { convertToPlainObject, formatError, isActive } from '../utils';
-import { insertOrderSchema } from '../validators';
+import { insertOrderSchema, insertOrderItemSchema } from '../validators';
 import { getMyCart } from './cart.actions';
 import { getUserById } from './user.actions';
 
@@ -25,10 +24,6 @@ type OrderActionResult = {
   success: boolean;
   message: string;
   redirectTo?: string;
-};
-
-type PayPalOrderActionResult = OrderActionResult & {
-  orderId?: string;
 };
 
 // ----- Helpers -----
@@ -153,9 +148,11 @@ export async function createOrder(): Promise<OrderActionResult> {
 
       // Create order items from cart items
       for (const item of cart.items) {
+        const orderItem = insertOrderItemSchema.parse(item);
+
         await tx.orderItem.create({
           data: {
-            ...item,
+            ...orderItem,
             orderId: insertedOrder.id,
           },
         });
@@ -205,104 +202,6 @@ export async function getOrderById(orderId: string) {
   });
 
   return order ? convertToPlainObject(order) : null;
-}
-
-/**
- * Creates a PayPal order for an existing app order.
- * Stores the PayPal order ID in the paymentResult field for later capture.
- */
-export async function createPayPalOrder(
-  orderId: string,
-): Promise<PayPalOrderActionResult> {
-  try {
-    // Get order form DB
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-    });
-
-    if (!order) throw new Error('Order not found - cannot create PayPal order');
-
-    if (order.paymentMethod !== 'PAYPAL')
-      throw new Error('Payment method is not PayPal for this order');
-
-    const paypalOrder = await paypal.createOrder(Number(order.totalPrice));
-
-    // Update order with PayPal order ID
-    await prisma.order.update({
-      where: { id: orderId },
-      data: {
-        paymentResult: {
-          id: paypalOrder.id,
-          email: '',
-          status: '',
-          pricePaid: 0,
-        },
-      },
-    });
-
-    return {
-      success: true,
-      message: 'PayPal order created successfully',
-      orderId: paypalOrder.id,
-    };
-  } catch (error: unknown) {
-    return {
-      success: false,
-      message: formatError(error),
-    };
-  }
-}
-
-// Approve PaypPal order - Update order payment result and mark as paid
-export async function approvePayPalOrder(
-  orderId: string,
-  data: { orderID: string },
-): Promise<OrderActionResult> {
-  try {
-    const order = await prisma.order.findUnique({
-      where: { id: orderId },
-    });
-
-    if (!order) throw new Error('Order not found');
-
-    if (order.paymentMethod !== 'PAYPAL')
-      throw new Error('Payment method is not PayPal for this order');
-
-    const captureData = await paypal.capturePayment(data.orderID);
-    const storedId = (order.paymentResult as PaymentResult)?.id;
-
-    if (
-      !captureData ||
-      captureData.status !== 'COMPLETED' ||
-      captureData.id !== storedId
-    ) {
-      throw new Error('Payment capture failed or does not match order');
-    }
-
-    await updateOrderToPaid({
-      orderId,
-      paymentResult: {
-        id: captureData.id,
-        status: captureData.status,
-        email: captureData.payer.email_address || '',
-        pricePaid:
-          captureData.purchase_units?.[0]?.payments?.captures?.[0]?.amount
-            ?.value || '',
-      },
-    });
-
-    revalidatePath(`/order/${orderId}`);
-
-    return {
-      success: true,
-      message: 'Your order has been paid',
-    };
-  } catch (error: unknown) {
-    return {
-      success: false,
-      message: formatError(error),
-    };
-  }
 }
 
 /** Returns a paginated list of orders for the currently authenticated user. */

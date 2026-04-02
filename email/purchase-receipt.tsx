@@ -1,5 +1,6 @@
 import sampleData from '@/db/sample-data';
 import { formatCurrency } from '@/lib';
+import { env } from '@/lib/env';
 import type { Order } from '@/types';
 import {
   Body,
@@ -15,8 +16,8 @@ import {
   Tailwind,
   Text,
 } from '@react-email/components';
-require('dotenv').config();
 import * as crypto from 'crypto';
+require('dotenv').config();
 
 // Polyfill crypto for React Email preview
 if (typeof globalThis.crypto === 'undefined') {
@@ -120,7 +121,7 @@ export default function PurchaseReceiptEmail({ order }: Props) {
                       src={
                         image.startsWith('/')
                           ? // When the image is locally hosted, prefix the url with the value of the PUBLIC_SERVER constant
-                            `${process.env.NEXT_PUBLIC_SERVER_URL}${image}`
+                            `${env.NEXT_PUBLIC_SERVER_URL}${image}`
                           : // Otherwise use the default url, ex. https://utfs.io/...
                             image
                       }

@@ -1,14 +1,14 @@
 'use client';
+import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
 
 const links = [
   { title: 'Profile', href: '/user/profile' },
   { title: 'Orders', href: '/user/orders' },
 ];
 
-interface Props extends React.HTMLAttributes<HTMLDivElement> {}
+interface Props extends React.HTMLAttributes<HTMLDivElement> { }
 
 const MainNav = ({ className, ...props }: Props) => {
   const pathname = usePathname();

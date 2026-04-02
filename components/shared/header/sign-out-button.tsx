@@ -1,17 +1,21 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { signOut } from 'next-auth/react';
-import React from 'react';
+import { signOutUser } from '@/lib/actions';
 
-export default function SignOutButton() {
-  return (
-    <Button
-      className='w-full py-4 px-2 h-4 justify-start'
-      variant='ghost'
-      onClick={() => signOut()}
-    >
-      SignOut
-    </Button>
-  );
-}
+const handleSignOut = async () => {
+  await signOutUser();
+};
+
+const SignOutButton = () => (
+  <Button
+    className='w-full py-4 px-2 h-4 justify-start'
+    variant='ghost'
+    onClick={handleSignOut}
+  >
+    SignOut
+  </Button>
+);
+
+
+export default SignOutButton;

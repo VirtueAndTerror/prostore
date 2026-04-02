@@ -5,12 +5,13 @@ import { prisma } from '@/db/prisma';
 import type { Cart, CartItem } from '@/types';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
+import { DEFAULT_PRICING_CONFIG } from '../constants';
 import { convertToPlainObject, formatError } from '../utils';
 import { cartItemsSchema } from '../validators';
-import { DEFAULT_PRICING_CONFIG } from '../constants';
 
 // ----- Types -----
 type CartActionResult = { success: boolean; message: string };
+
 type PricingConfig = {
   freeShippingThresholdCents: number;
   shippingFlatRateCents: number;
@@ -23,6 +24,7 @@ type CartContext = {
 };
 
 // ----- Helpers -----
+
 /** Reads the sessionCartId cookie and the current auth session in one call. */
 async function getCartContext(): Promise<CartContext> {
   const cookieStore = await cookies();
@@ -127,20 +129,6 @@ export const addItemToCart = async (
       },
     });
 
-    // Recalculate cart totals after item update
-    const cartItemsDb = await prisma.cartItem.findMany({ where: { cartId } });
-    const priceData = calcPrice(
-      cartItemsDb.map((ci) => ({
-        ...ci,
-        price: ci.price.toString(),
-      })) as CartItem[],
-      DEFAULT_PRICING_CONFIG
-    );
-
-    await prisma.cart.update({
-      where: { id: cartId },
-      data: { ...priceData },
-    });
 
     revalidatePath(`/product/${product.slug}`);
 
@@ -156,6 +144,63 @@ export const addItemToCart = async (
     };
   }
 };
+
+export async function mergeGuestCartIntoUserCart(userId: string) {
+  try {
+    const cookieStore = await cookies();
+    const sessionCartId = cookieStore.get('sessionCartId')?.value;
+    if (!sessionCartId) return;
+
+    const guestCart = await prisma.cart.findUnique({
+      where: { sessionCartId },
+      include: { items: true },
+    });
+
+    if (!guestCart || guestCart.userId) return; // not a guest cart
+
+    const userCart = await prisma.cart.findFirst({
+      where: { userId },
+      include: { items: true },
+    });
+
+    if (!userCart) {
+      await prisma.cart.update({
+        where: { id: guestCart.id },
+        data: { userId },
+      });
+      return;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const guestItem of guestCart.items) {
+        await tx.cartItem.upsert({
+          where: {
+            cartId_productId: {
+              cartId: userCart.id,
+              productId: guestItem.productId,
+            },
+          },
+          update: { qty: { increment: guestItem.qty } },
+          create: {
+            cartId: userCart.id,
+            productId: guestItem.productId,
+            qty: guestItem.qty,
+            price: guestItem.price,
+            name: guestItem.name,
+            slug: guestItem.slug,
+            image: guestItem.image,
+          },
+        });
+      }
+
+
+      await tx.cart.delete({ where: { id: guestCart.id } });
+    });
+  } catch (err) {
+    console.error('Error merging carts:', err);
+  }
+}
+
 
 export async function getMyCart(): Promise<Cart | null> {
   try {
@@ -179,88 +224,19 @@ export async function getMyCart(): Promise<Cart | null> {
 
     if (!cart) return null;
 
-    // If user is logged in and the current session cart is a guest cart (no userId associated)
-    if (userId && cart && !cart.userId) {
-      // Check if the user already has a saved cart in the database
-      let userCart = await prisma.cart.findFirst({
-        where: { userId },
-        include: { items: true },
-      });
+    // Calculate totals dynamically for the response
+    const formattedItems = cart.items.map((item) => ({
+      ...item,
+      price: item.price.toString(),
+    })) as CartItem[];
 
-      if (!userCart) {
-        // Scenario 1: User has no saved cart, so we just claim the guest cart
-        await prisma.cart.update({
-          where: { id: cart.id },
-          data: { userId },
-        });
-      } else {
-        // Scenario 2: User has a saved cart. Merge guest cart items into user cart.
-        const guestCart = cart;
-        await prisma.$transaction(async (tx) => {
-          // 1. Transfer guest items to user cart (update qty if exists, create if not)
-          for (const guestItem of guestCart.items) {
-            await tx.cartItem.upsert({
-              where: {
-                cartId_productId: {
-                  cartId: userCart.id,
-                  productId: guestItem.productId,
-                },
-              }, // ← CartItem
-              update: { qty: { increment: guestItem.qty } },
-              create: {
-                cartId: userCart.id,
-                productId: guestItem.productId,
-                qty: guestItem.qty,
-                price: guestItem.price,
-                name: guestItem.name,
-                slug: guestItem.slug,
-                image: guestItem.image,
-              },
-            });
-          }
-
-          // 2. Recalculate totals for the user cart
-          const mergedItemsForCalc = await tx.cartItem.findMany({
-            where: { cartId: userCart.id },
-          });
-          const newCalc = calcPrice(
-            mergedItemsForCalc.map((i) => ({
-              ...i,
-              price: i.price.toString(),
-            })) as CartItem[],
-            DEFAULT_PRICING_CONFIG
-          );
-
-          await tx.cart.update({
-            where: { id: userCart.id },
-            data: { ...newCalc },
-          });
-
-          // 3. Delete the old guest cart to prevent duplication/orphaned data
-          await tx.cart.delete({ where: { id: guestCart.id } });
-        });
-
-        // Re-fetch the updated user cart to return
-        cart = await prisma.cart.findUnique({
-          where: { id: userCart.id },
-          include: { items: true },
-        });
-      }
-    }
-
-    if (!cart) return null;
+    const priceData = calcPrice(formattedItems, DEFAULT_PRICING_CONFIG);
 
     // Convert Decimal types to strings for client-side compatibility
     return convertToPlainObject({
       ...cart,
-      items: cart.items.map((item) => ({
-        ...item,
-        price: item.price.toString(),
-      })) as CartItem[],
-      itemsPrice: cart.itemsPrice.toString(),
-      totalPrice: cart.totalPrice.toString(),
-      taxPrice: cart.taxPrice.toString(),
-      shippingPrice: cart.shippingPrice.toString(),
+      items: formattedItems,
+      ...priceData,
     });
   } catch (error: unknown) {
     console.error(formatError(error));
@@ -299,22 +275,6 @@ export const removeItemFromCart = async (
       });
     }
 
-    // Recalculate cart totals
-    const remainingItems = await prisma.cartItem.findMany({
-      where: { cartId },
-    });
-    const priceData = calcPrice(
-      remainingItems.map((i) => ({
-        ...i,
-        price: i.price.toString(),
-      })) as CartItem[],
-      DEFAULT_PRICING_CONFIG
-    );
-
-    await prisma.cart.update({
-      where: { id: cartId },
-      data: { ...priceData },
-    });
 
     revalidatePath(`/product/${product.slug}`);
 

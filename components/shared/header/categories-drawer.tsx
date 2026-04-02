@@ -33,7 +33,7 @@ const CategoryDrawer = async () => {
                 variant={'ghost'}
                 className='w-full justify-start'
               >
-                <DrawerClose>
+                <DrawerClose asChild>
                   <Link href={`/search?category=${c.category}`}>
                     {c.category} ({c._count})
                   </Link>

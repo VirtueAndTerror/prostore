@@ -1,19 +1,13 @@
-import type { PayPalOrderPayload, CapturePaymentResponse, CreateOrderResponse } from "@/types";
+import type {
+  PayPalOrderPayload,
+  CapturePaymentResponse,
+  CreateOrderResponse,
+} from '@/types';
+import { serverEnv } from '@/lib/server-env';
 
 // Sandbox: https://api-m.sandbox.paypal.com
 // Live:    https://api-m.paypal.com
-const BASE_URL =
-  process.env.PAYPAL_API_URL || 'https://api-m.sandbox.paypal.com';
-
-
-
-// Paypal environment variables validation function
-export function validateEnv(): void {
-  const { PAYPAL_CLIENT_ID, PAYPAL_APP_SECRET } = process.env;
-  if (!PAYPAL_CLIENT_ID || !PAYPAL_APP_SECRET) {
-    throw new Error('Missing PayPal required environment variables');
-  }
-}
+const BASE_URL = serverEnv.PAYPAL_API_URL;
 
 // Main Paypal Object
 export const paypal = {
@@ -60,12 +54,10 @@ export const paypal = {
 };
 
 // Generate PayPal access token
-export const generateAccessToken = async (): Promise<string> => {
-  validateEnv();
-  const { PAYPAL_CLIENT_ID, PAYPAL_APP_SECRET } = process.env;
-  const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_APP_SECRET}`).toString(
-    'base64',
-  );
+export async function generateAccessToken(): Promise<string> {
+  const auth = Buffer.from(
+    `${serverEnv.PAYPAL_CLIENT_ID}:${serverEnv.PAYPAL_APP_SECRET}`,
+  ).toString('base64');
 
   const res = await fetch(`${BASE_URL}/v1/oauth2/token`, {
     method: 'POST',
@@ -83,7 +75,7 @@ export const generateAccessToken = async (): Promise<string> => {
   if (!data?.access_token) throw new Error('Paypal token missing in response');
 
   return data.access_token;
-};
+}
 
 async function handleResponse<T>(res: Response, funcName: string): Promise<T> {
   const text = await res.text();

@@ -1,4 +1,7 @@
-import { loadStripe } from '@stripe/stripe-js';
+import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib';
+import { SERVER_URL } from '@/lib/constants';
+import { env } from '@/lib/env';
 import {
   Elements,
   LinkAuthenticationElement,
@@ -6,11 +9,9 @@ import {
   useElements,
   useStripe,
 } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
 import { useTheme } from 'next-themes';
-import { FormEvent, useState } from 'react';
-import { formatCurrency } from '@/lib';
-import { Button } from '@/components/ui/button';
-import { SERVER_URL } from '@/lib/constants';
+import { SyntheticEvent, useState } from 'react';
 
 interface Props {
   priceInCents: number;
@@ -18,12 +19,12 @@ interface Props {
   clientSecret: string;
 }
 
+// Called only once per render
+const stripePromise = loadStripe(env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+
 const StripePayment = ({ priceInCents, orderId, clientSecret }: Props) => {
   const { theme, systemTheme } = useTheme();
 
-  const stripePromise = loadStripe(
-    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY as string,
-  );
 
   const StripeForm = () => {
     const stripe = useStripe();
@@ -33,31 +34,32 @@ const StripePayment = ({ priceInCents, orderId, clientSecret }: Props) => {
     const [errorMsg, setErrorMsg] = useState<string>('');
     const [email, setEmail] = useState<string>('');
 
-    const handleSubmit = async (e: FormEvent) => {
+    const handleSubmit = async (e: SyntheticEvent<HTMLFormElement>) => {
       e.preventDefault();
 
-      if (stripe == null || elements == null || email == null) return;
+      if (stripe == null || elements == null || !email) return;
 
       setIsLoading(true);
 
-      stripe
-        .confirmPayment({
+      try {
+        const { error } = await stripe.confirmPayment({
           elements,
           confirmParams: {
             return_url: `${SERVER_URL}/order/${orderId}/stripe-payment-success`,
           },
-        })
-        .then(({ error }) => {
-          if (
-            error?.type === 'card_error' ||
-            error?.type === 'validation_error'
-          ) {
-            setErrorMsg(error?.message ?? 'An unknown error ocurred');
-          } else if (error) {
-            setErrorMsg('An unknown error ocurred');
-          }
-        })
-        .finally(() => setIsLoading(false));
+        });
+
+        if (
+          error.type === 'card_error' ||
+          error.type === 'validation_error'
+        ) {
+          setErrorMsg(error.message ?? 'An unknown error occurred');
+        } else if (error) {
+          setErrorMsg('An unknown error occurred');
+        }
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     return (
@@ -77,25 +79,21 @@ const StripePayment = ({ priceInCents, orderId, clientSecret }: Props) => {
         >
           {isLoading
             ? 'Purchasing...'
-            : `Purchase $${formatCurrency(priceInCents / 100)}`}
+            : `Purchase ${formatCurrency(priceInCents / 100)}`}
         </Button>
       </form>
     );
   };
+
+  const resolvedTheme = theme === "system" ? systemTheme : theme;
+  const stripeTheme = resolvedTheme === "dark" ? "night" : "stripe";
 
   return (
     <Elements
       options={{
         clientSecret,
         appearance: {
-          theme:
-            theme === 'dark'
-              ? 'night'
-              : theme === 'light'
-                ? 'stripe'
-                : systemTheme === 'light'
-                  ? 'stripe'
-                  : 'night',
+          theme: stripeTheme
         },
       }}
       stripe={stripePromise}

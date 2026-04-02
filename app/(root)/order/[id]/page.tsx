@@ -1,5 +1,6 @@
 import { auth } from '@/auth';
 import { getOrderById } from '@/lib/actions';
+import { serverEnv } from '@/lib/server-env';
 import type { PaymentResult, ShippingAddress } from '@/types';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -27,13 +28,12 @@ const OrderDetailsPage = async (props: Props) => {
 
   const { id: orderId, paymentMethod, isPaid, totalPrice } = order;
 
-
   let client_secret = null;
 
   // Check if not paid and using stripe
   if (paymentMethod === 'STRIPE' && !isPaid) {
     // Initialize Stripe instance
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+    const stripe = new Stripe(serverEnv.STRIPE_SECRET_KEY);
     // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(Number(totalPrice) * 100),
@@ -51,7 +51,7 @@ const OrderDetailsPage = async (props: Props) => {
         paymentResult: order.paymentResult as PaymentResult,
       }}
       stripeClientSecret={client_secret}
-      paypalClientId={process.env.PAYPAL_CLIENT_ID || 'sb'}
+      paypalClientId={serverEnv.PAYPAL_CLIENT_ID || 'sb'}
       isAdmin={session?.user?.role === 'admin'}
     />
   );

@@ -1,15 +1,12 @@
-export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'Prostore';
+import { env } from '../env';
 
-export const APP_DESCRIPTION =
-  process.env.NEXT_PUBLIC_APP_DESCRIPTION ||
-  'A modern e-commerce store build with Next.js';
+export const APP_NAME = env.NEXT_PUBLIC_APP_NAME;
 
-export const SERVER_URL =
-  process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3000';
+export const APP_DESCRIPTION = env.NEXT_PUBLIC_APP_DESCRIPTION;
 
-export const LATEST_PRODUCTS_LIMIT = Number(
-  process.env.LATEST_PRODUCTS_LIMIT || 4,
-);
+export const SERVER_URL = env.NEXT_PUBLIC_SERVER_URL;
+
+export const LATEST_PRODUCTS_LIMIT = env.LATEST_PRODUCTS_LIMIT;
 
 export const FEATURED_PRODUCTS_LIMIT = 4;
 
@@ -64,9 +61,9 @@ export const REVIEW_DEFAULT_VALUES = {
 };
 
 // Pricing Config
-export const FREE_SHIPPING_THRESHOLD_CENTS = Number(process.env.FREE_SHIPPING_THRESHOLD) || 10000;
-export const SHIPPING_FLAT_RATE_CENTS = Number(process.env.SHIPPING_FLAT_RATE) || 1000;
-export const TAX_RATE_BASE = Number(process.env.TAX_RATE) || 0.15;
+export const FREE_SHIPPING_THRESHOLD_CENTS = env.FREE_SHIPPING_THRESHOLD;
+export const SHIPPING_FLAT_RATE_CENTS = env.SHIPPING_FLAT_RATE;
+export const TAX_RATE_BASE = env.TAX_RATE;
 
 export const DEFAULT_PRICING_CONFIG = {
   freeShippingThresholdCents: FREE_SHIPPING_THRESHOLD_CENTS,
@@ -75,11 +72,9 @@ export const DEFAULT_PRICING_CONFIG = {
 };
 
 // Payments Config
-export const PAYMENT_METHODS = process.env.PAYMENT_METHODS
-  ? process.env.PAYMENT_METHODS.split(', ')
-  : ['PAYPAL', 'STRIPE', 'CASH_ON_DELIVERY'];
+export const PAYMENT_METHODS = env.PAYMENT_METHODS;
 
-export const DEFAULT_PAYMENT_METHOD = process.env.PAYMENT_METHOD || 'PAYPAL';
+export const DEFAULT_PAYMENT_METHOD = env.PAYMENT_METHOD;
 
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   PAYPAL: 'PayPal',
@@ -108,11 +103,9 @@ export function formatPaymentMethod(method?: string | null) {
 }
 
 // Pagination Constants
-export const PAGE_SIZE = Number(process.env.PAGE_SIZE) || 4;
+export const PAGE_SIZE = env.PAGE_SIZE;
 
-export const USER_ROLES = process.env.USER_ROLES
-  ? process.env.USER_ROLES.split(', ')
-  : new Array('admin', 'user');
+export const USER_ROLES = env.USER_ROLES;
 
 //
 export const PRICES_OPTS = [
@@ -143,4 +136,4 @@ export const RATINGS_OPTS = [4, 3, 2, 1] as const;
 export const SORT_OPTS = ['newest', 'lowest', 'highest', 'rating'] as const;
 
 // Resend Config
-export const SENDER_EMAIL = process.env.SENDER_EMAIL || 'onboarding@resend.dev';
+export const SENDER_EMAIL = env.SENDER_EMAIL;

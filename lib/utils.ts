@@ -14,48 +14,76 @@ export function convertToPlainObject<T>(value: T): T {
 }
 
 // Format errors
-// exlint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function formatError(error: unknown): string {
-  // 1. Always log the raw error for server-side debugging
-  console.error('Raw Error:;', error);
+  // Always log the raw error for server-side debugging
+  console.error(error);
 
-  // 2. Guard Clause: Handle Zod Validation Errors
+  // Zod v4 validation errors — uses .issues (v4 removed .errors getter)
   if (error instanceof z.ZodError) {
-    const validationErrors = z.flattenError(error);
-    const { formErrors, fieldErrors } = validationErrors;
+    const issues = error.issues.map((issue) => {
+      const path = issue.path.length ? issue.path.join('.') : 'form';
+      return `${path}: ${issue.message}`;
+    });
 
-    // Collect all field errors into a readable list
-    const fieldMessages = (
-      Object.entries(fieldErrors) as [string, string[]][]
-    ).map(([field, msgs]) => `${field}: ${msgs?.join(', ')}`);
-
-    const allMessages = [...formErrors, ...fieldMessages];
-
-    return allMessages.join('\n') || 'Validation faild';
+    return issues.join(' | ') || 'Validation failed.';
   }
-  // 3. Guard Clause: Handle Prisma Known Errors
+
+  // Prisma v7 known request errors (query engine errors with a code)
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
-    if (error.code === 'P2002') {
-      const target = (error.meta?.target as string[]) || ['Field'];
-      const field = target[0];
-      return `${field.charAt(0).toUpperCase() + field.slice(1)} already exists.`;
+    switch (error.code) {
+      case 'P2002': {
+        const target = Array.isArray(error.meta?.target)
+          ? error.meta.target.join(', ')
+          : String(error.meta?.target ?? 'Field');
+        return `${target.charAt(0).toUpperCase() + target.slice(1)} already exists.`;
+      }
+      case 'P2003': {
+        const field = String(error.meta?.field_name ?? 'Related record');
+        return `${field} references a record that does not exist.`;
+      }
+      case 'P2014':
+        return 'This change would violate a required relation between records.';
+      case 'P2021':
+        return 'The requested resource does not exist in the database.';
+      case 'P2022':
+        return 'A required field is missing from the database.';
+      case 'P2023':
+        return 'The data provided is inconsistent with the expected format.';
+      case 'P2025':
+        return 'Record not found.';
+      default:
+        return 'A database error occurred. Please try again later.';
     }
-    // Handle record not found in DB
-    if (error.code === 'P2025') {
-      return error.message || 'Record not found';
-    }
-
-    //Internal fallback for other Prisma codes
-    return `Database error: ${error.message}`;
   }
-  // 4. Guard Clause: Standard JavaScript Error
+
+  // Prisma validation errors (malformed queries, missing fields, type mismatches)
+  if (error instanceof Prisma.PrismaClientValidationError) {
+    return 'Invalid data submitted. Please check your input and try again.';
+  }
+
+  // Prisma initialization/connection errors
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    return 'Unable to connect to the database. Please try again later.';
+  }
+
+  // Native Error (checked after Prisma subclasses to avoid shadowing)
   if (error instanceof Error) {
-    return error.message;
+    return error.message || 'An unexpected error occurred.';
   }
 
-  return typeof error === 'string'
-    ? error
-    : 'An unexpected error has occurred. Please try again later';
+  // Plain string errors
+  if (typeof error === 'string') {
+    return error;
+  }
+
+  // Other thrown values (e.g. plain objects with a message property)
+  if (typeof error === 'object' && error !== null) {
+    const maybeMessage = (error as { message?: unknown }).message;
+    if (typeof maybeMessage === 'string') return maybeMessage;
+  }
+
+  return 'An unexpected error occurred. Please try again later.';
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {

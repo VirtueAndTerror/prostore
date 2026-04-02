@@ -1,10 +1,11 @@
-import { Resend } from 'resend';
-import { SENDER_EMAIL, APP_NAME } from '@/lib/constants';
+import { APP_NAME, SENDER_EMAIL } from '@/lib/constants';
+import { serverEnv } from '@/lib/server-env';
 import type { Order } from '@/types';
+import { Resend } from 'resend';
 import PurchaseReceiptEmail from './purchase-receipt';
 require('dotenv').config();
 
-const resend = new Resend(process.env.RESEND_API_KEY as string);
+const resend = new Resend(serverEnv.RESEND_API_KEY);
 
 export const sendPurchaseReciept = async (order: Order) => {
   await resend.emails.send({
