@@ -11,14 +11,12 @@ import {
 } from '@/components/ui/table';
 import { formatCurrency } from '@/lib';
 import { getMyCart, getUserById } from '@/lib/actions';
-import type { ShippingAddress } from '@/types';
+import { getAuthenticatedUserId } from '@/lib/auth-utils';
+import { formatPaymentMethod } from '@/lib/constants';
 import { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-
-import { getAuthenticatedUserId } from '@/lib/auth-utils';
-import { formatPaymentMethod } from '@/lib/constants';
 import PlaceOrderForm from './place-order-form';
 
 export const metadata: Metadata = {
@@ -31,7 +29,7 @@ const PlaceOrderPage = async () => {
 
   // 2. Fetch cart
   const cart = await getMyCart();
-  if (!cart || cart.items.length === 0) redirect('/cart');
+  if (!cart?.items?.length) redirect('/cart');
 
   // 3. Fetch user by ID
   const { address, paymentMethod } = await getUserById(userId);
@@ -39,9 +37,7 @@ const PlaceOrderPage = async () => {
   if (!paymentMethod) redirect('/payment-method');
 
   const { items, itemsPrice, taxPrice, shippingPrice, totalPrice } = cart;
-
-  const { fullName, streetAddress, city, postalCode, country } =
-    address as ShippingAddress;
+  const { fullName, streetAddress, city, postalCode, country } = address;
 
   return (
     <>

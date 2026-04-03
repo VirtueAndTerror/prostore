@@ -108,7 +108,7 @@ export async function createOrder(): Promise<OrderActionResult> {
     const [cart, user] = await Promise.all([getMyCart(), getUserById(userId)]);
 
     // Guard: cart must be non-empty.
-    if (!cart || cart.items.length === 0) {
+    if (!cart?.items?.length) {
       return {
         success: false,
         message: 'Cart is empty',

@@ -3,7 +3,7 @@
 import { auth, signIn, signOut } from '@/auth';
 import { prisma } from '@/db/prisma';
 import { Prisma } from '@/lib/generated/prisma';
-import type { ShippingAddress } from '@/types';
+import { User, ShippingAddress } from '@/types';
 import { hashSync } from 'bcrypt-ts-edge';
 import { revalidatePath } from 'next/cache';
 import { isRedirectError } from 'next/dist/client/components/redirect-error';
@@ -54,7 +54,9 @@ export async function signInWithCredentials(
   } catch (error: unknown) {
     if (isRedirectError(error)) {
       if (userEmail) {
-        const user = await prisma.user.findUnique({ where: { email: userEmail } });
+        const user = await prisma.user.findUnique({
+          where: { email: userEmail },
+        });
         if (user) await mergeGuestCartIntoUserCart(user.id);
       }
       throw error;
@@ -92,7 +94,6 @@ export async function signOutUser(): Promise<void> {
     // Signal to middleware that a sign-out just occurred
     cookieStore.set('signed-out', '1', { maxAge: 5, httpOnly: true });
     await signOut();
-
   } catch (error: unknown) {
     if (isRedirectError(error)) {
       throw error;
@@ -144,7 +145,7 @@ export async function signUpUser(
  * Fetches a user by ID, excluding the password field.
  * Throws if no user is found — callers should only pass valid IDs.
  */
-export async function getUserById(id: string) {
+export async function getUserById(id: string): Promise<User> {
   const user = await prisma.user.findUnique({
     where: { id },
     omit: { password: true },
@@ -154,7 +155,19 @@ export async function getUserById(id: string) {
     throw new Error('User not found with the provided ID');
   }
 
-  return user;
+  if (!user.address) {
+    throw new Error('User has no shipping address');
+  }
+
+  const parsedAddress = shippingAddressSchema.safeParse(user.address);
+  if (!parsedAddress.success) {
+    throw new Error('Invalid shipping address format');
+  }
+
+  return {
+    ...user,
+    address: parsedAddress.data,
+  };
 }
 
 /** Returns a paginated, optionally filtered list of all users (admin use). */
@@ -170,11 +183,11 @@ export async function getAllUsers({
   const where: Prisma.UserWhereInput =
     query && query !== 'all'
       ? {
-        name: {
-          contains: query,
-          mode: 'insensitive',
-        } as Prisma.StringFilter,
-      }
+          name: {
+            contains: query,
+            mode: 'insensitive',
+          } as Prisma.StringFilter,
+        }
       : {};
 
   const [data, dataCount] = await prisma.$transaction([
